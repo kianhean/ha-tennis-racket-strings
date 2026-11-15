@@ -100,6 +100,7 @@ async def test_dashboard_entities_exist(hass: HomeAssistant) -> None:
             "tension_unit": "lbs",
             "specs": {s.key: s.min for s in SPECS},
             "play": {"hours_per_week": 4},
+            "due": {"days": 60},
         },
     )
     await hass.async_block_till_done()

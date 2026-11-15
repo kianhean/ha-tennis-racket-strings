@@ -28,7 +28,7 @@
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/dashboard-dark.png">
-  <img src="images/screenshots/dashboard-light.png" alt="The example Rackets dashboard: photo, current hybrid strings, tension and estimated tension, specs from the dataset and your measurements, and a restring history table with photos" width="800">
+  <img src="images/screenshots/dashboard-light.png" alt="The example Rackets dashboard: photo, current hybrid strings, tension and estimated tension, log, usual setup and rate buttons, specs from the dataset and your measurements, restring due and next restring with a calendar, and a restring history table with photos" width="800">
 </picture>
 </p>
 
@@ -355,7 +355,10 @@ Home Assistant's built-in cards:
 
 - the racket photo, current strings, tension, string age, last restrung and total spent
 - the estimated tension now and how much has been lost (remove those two tiles if you don't set hours per week)
-- **Log restring** and **Rate strings** buttons (they open the script forms)
+- **Log restring** and **Rate strings** buttons (they open the script forms), and **Usual setup**,
+  which logs your [usual setup](#usual-setup) for today after a confirmation
+- a **Schedule** column: Restring due, Next restring and a month calendar of restrings and the next
+  one due (remove it if you don't set a [restring rule](#restring-due))
 - the current setup's rating and notes, your specs, and tension (strung and estimated) over time
 - a history table with photo thumbnails, strings, tensions, cost, stars and notes
 

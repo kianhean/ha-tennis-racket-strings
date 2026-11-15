@@ -12,10 +12,11 @@ custom_components/racket_tracker/
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
+├── tension.py         # Estimated tension: options["play"] (hours/week, initial loss, loss/hour) → estimate()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
 ├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible "specs"); options flow edits them
 ├── entity.py          # racket_device_info(entry)
-├── sensor.py          # History-derived sensors + one RacketSpecSensor per spec that has a value
+├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), one RacketSpecSensor per spec
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
 ├── services.yaml      # add_restring, update_restring, delete_restring, get_history
@@ -45,6 +46,8 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   `dataset_racket` (`slug`, `name`, `version`). The options flow keeps both unless "Use looked-up
   specs" is turned off. Dataset details only fill brand/model/head size/pattern the user left
   blank. Changing options reloads the entry.
+- `play` (optional section): `hours_per_week`, `initial_tension_loss` (default 10 %),
+  `tension_loss_per_hour` (default 1 %). Without hours/week the estimate sensors are removed.
 - The dataset (`https://www.racqix.com/api/racquets?mode=minimal`) is the integration's only
   network request; tests mock it with `aioclient_mock`.
 

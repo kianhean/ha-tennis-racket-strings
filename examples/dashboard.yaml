@@ -38,6 +38,15 @@ sections:
         entity: sensor.pure_aero_total_string_cost
         name: Total spent
         grid_options: { columns: 6 }
+      # Needs "Hours of play per week" set on the racket (Configure → Play)
+      - type: tile
+        entity: sensor.pure_aero_estimated_tension
+        name: Tension now (est.)
+        grid_options: { columns: 6 }
+      - type: tile
+        entity: sensor.pure_aero_estimated_tension_loss
+        name: Tension lost (est.)
+        grid_options: { columns: 6 }
       - type: button
         name: Log restring
         icon: mdi:plus-circle
@@ -91,6 +100,7 @@ sections:
         hours_to_show: 8760
         entities:
           - entity: sensor.pure_aero_tension
+          - entity: sensor.pure_aero_estimated_tension
 
   # ── Full history with photos ─────────────────────────────────────
   - type: grid

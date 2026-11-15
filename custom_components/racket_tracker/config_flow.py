@@ -40,6 +40,12 @@ from .dataset import (
     search,
 )
 from .specs import CONF_DATASET_SPECS, CONF_SPECS, SPECS
+from .tension import (
+    CONF_HOURS_PER_WEEK,
+    CONF_INITIAL_LOSS,
+    CONF_LOSS_PER_HOUR,
+    CONF_PLAY,
+)
 
 CONF_LOOKUP = "lookup"
 CONF_RACQUET = "racquet"
@@ -86,8 +92,33 @@ RACKET_DETAILS_SCHEMA = vol.Schema(
     }
 )
 
+
+def _number(low: float, high: float, step: float, unit: str) -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=low,
+            max=high,
+            step=step,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement=unit,
+        )
+    )
+
+
+# How much the racket is played; enables the estimated tension sensors.
+PLAY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_HOURS_PER_WEEK): _number(0, 60, 0.5, "h"),
+        vol.Optional(CONF_INITIAL_LOSS): _number(0, 30, 0.5, "%"),
+        vol.Optional(CONF_LOSS_PER_HOUR): _number(0, 10, 0.1, "%"),
+    }
+)
+
 RACKET_DETAILS_SCHEMA = RACKET_DETAILS_SCHEMA.extend(
-    {vol.Optional(CONF_SPECS): section(SPECS_SCHEMA, {"collapsed": True})}
+    {
+        vol.Optional(CONF_PLAY): section(PLAY_SCHEMA, {"collapsed": True}),
+        vol.Optional(CONF_SPECS): section(SPECS_SCHEMA, {"collapsed": True}),
+    }
 )
 
 LOOKUP_SCHEMA = vol.Schema({vol.Optional(CONF_LOOKUP): TextSelector()})
@@ -104,6 +135,11 @@ def _clean(user_input: dict[str, Any], errors: dict[str, str]) -> dict[str, Any]
     data = dict(user_input)
     specs = {k: v for k, v in (data.get(CONF_SPECS) or {}).items() if v is not None}
     data[CONF_SPECS] = specs
+    play = {k: v for k, v in (data.get(CONF_PLAY) or {}).items() if v is not None}
+    if play:
+        data[CONF_PLAY] = play
+    else:
+        data.pop(CONF_PLAY, None)
     low, high = specs.get("tension_min"), specs.get("tension_max")
     if low is not None and high is not None and low > high:
         errors["base"] = "tension_range"

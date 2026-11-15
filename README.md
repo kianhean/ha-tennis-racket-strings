@@ -29,7 +29,7 @@
 
 | | | |
 |---|---|---|
-| 🎾 **One device per racket**<br>Brand, model, head size and string pattern; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer for every job | 📝 **Notes and ratings**<br>Rate each setup 1–5 and note what you liked, now or after a few sessions |
+| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>Set hours of play per week and see roughly what tension the strings are at now |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
 | 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring reminders, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The only network request is the optional racket lookup |
 
@@ -62,7 +62,8 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 | Brand / Model | `Babolat` / `Pure Aero 98` | Shown on the device |
 | Head size | `98` sq in | |
 | String pattern | `16x20` | |
-| Tension unit | lbs or kg | Used for all tensions on this racket |
+| Tension unit | lbs or kg | Used for every tension on this racket: restrings, recommended range and estimates |
+| **Play and tension loss** *(optional, collapsed)* | `4` h/week | Turns on the [tension estimate](#estimated-tension) |
 | **Specs** *(optional, collapsed)* | see [Racket specs](#racket-specs) | Your own measurements |
 
 If you filled in **Look up**, the next step lists the matching rackets. Pick yours, or leave it empty
@@ -161,6 +162,33 @@ listed for roughly 40% of them.
 - Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
 - To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
 
+## Estimated tension
+
+Strings lose tension: a lot on the first day, whether you play or not, then a bit every hour you
+play. Tell Strung how much you play a racket (**Play and tension loss**, when adding it or under
+**Configure**) and it estimates where the current strings are:
+
+| Field | Default | |
+|---|---|---|
+| Hours of play per week | — | Required for the estimate |
+| Initial tension loss | 10 % | Lost in the first day after stringing |
+| Tension loss per hour of play | 1 % | Lost for every hour you play |
+
+```text
+hours played = hours per week × days since the restring ÷ 7
+loss         = initial loss + loss per hour × hours played   (at most 50 %)
+tension now  = strung tension × (1 − loss)
+```
+
+Example: strung at 52 lbs two weeks ago, 4 hours a week → 8 hours played, 10 % + 8 % = 18 % lost,
+about **42.6 lbs** now. The defaults suit polyester; multifilament and natural gut keep tension
+better, so lower both losses for those. For a hybrid, the same loss is applied to mains and crosses.
+
+This adds three sensors, updated at midnight and after every restring: **Estimated tension** (in the
+racket's unit; `strung_tension`, `estimated_cross_tension`), **Estimated tension loss** (%) and
+**Hours played**. Clear the hours to remove them. To get a reminder, trigger an automation on
+**Estimated tension loss** going above, say, 25 %.
+
 ## Recipes
 
 ### One-click blueprints
@@ -214,8 +242,9 @@ actions:
 Home Assistant's built-in cards:
 
 - the racket photo, current strings, tension, string age, last restrung and total spent
+- the estimated tension now and how much has been lost (remove those two tiles if you don't set hours per week)
 - **Log restring** and **Rate strings** buttons (they open the script forms)
-- the current setup's rating and notes, your specs, and tension over time
+- the current setup's rating and notes, your specs, and tension (strung and estimated) over time
 - a history table with photo thumbnails, strings, tensions, cost, stars and notes
 
 Replace `pure_aero` with your racket's entity prefix. A test checks that every entity it uses exists.
@@ -246,6 +275,9 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `sensor.<racket>_days_since_restring` | `12` d | Updated at midnight |
 | `sensor.<racket>_restrings` | `7` | `history`: every restring, newest first (not stored in the recorder) |
 | `sensor.<racket>_total_string_cost` | `6650` (your currency) | `average_cost` |
+| `sensor.<racket>_estimated_tension` | `42.6` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, play settings. Only with [hours per week](#estimated-tension) |
+| `sensor.<racket>_estimated_tension_loss` | `18` % | play settings |
+| `sensor.<racket>_hours_played` | `8` h | Since the latest restring |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |
 | `sensor.<racket>_<spec>` | see [Racket specs](#racket-specs) | `source`: `measured` / `dataset` |
 

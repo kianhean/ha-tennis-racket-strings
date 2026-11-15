@@ -1,0 +1,64 @@
+blueprint:
+  name: Racket – rate your strings
+  description: >-
+    A few days after a restring, remind you to add a rating and notes if you
+    haven't yet, so you remember what you liked. Uses the **Strings** sensor
+    from the Racket String Tracker integration; rate with the
+    "Update restring" action (leave the restring ID empty for the latest).
+  domain: automation
+  author: Racket String Tracker
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/rate_strings.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    strings_sensor:
+      name: Strings sensor
+      selector:
+        entity:
+          filter:
+            - integration: racket_tracker
+              domain: sensor
+    days:
+      name: Days after restring
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          step: 1
+          unit_of_measurement: d
+    notify_action:
+      name: Notify action
+      description: >-
+        The action that sends the notification, for example
+        notify.mobile_app_your_phone. Leave as notify.notify to use the default.
+      default: notify.notify
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+trigger_variables:
+  strings_sensor: !input strings_sensor
+  days: !input days
+
+triggers:
+  # Re-evaluated every minute because it uses now(); fires once when the
+  # latest restring is old enough and still has no rating.
+  - trigger: template
+    value_template: >-
+      {% set d = state_attr(strings_sensor, 'date') %}
+      {{ d is not none and state_attr(strings_sensor, 'rating') is none
+         and (now().date() - (d | as_datetime).date()).days >= days }}
+
+variables:
+  racket: "{{ device_attr(device_id(strings_sensor), 'name') or 'your racket' }}"
+
+actions:
+  - action: !input notify_action
+    data:
+      title: "How do the new strings feel?"
+      message: >-
+        Rate {{ states(strings_sensor) }} on {{ racket }} and add a note on
+        what you like or don't.

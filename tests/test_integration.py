@@ -1,0 +1,243 @@
+"""End-to-end tests: add a racket, log restrings with photos, edit, delete."""
+
+from pathlib import Path
+
+from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import async_capture_events
+
+from custom_components.racket_tracker.const import DOMAIN, EVENT_RESTRUNG
+
+PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06"
+    b"\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01"
+    b"\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+async def _add_racket(hass: HomeAssistant) -> str:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] == "form"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Pure Aero",
+            "brand": "Babolat",
+            "model": "Pure Aero 98",
+            "head_size": 98,
+            "string_pattern": "16x20",
+            "tension_unit": "lbs",
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    return result["result"].entry_id
+
+
+async def test_full_flow(hass: HomeAssistant, tmp_path: Path, hass_client) -> None:
+    hass.config.currency = "THB"
+    hass.config.allowlist_external_dirs = {str(tmp_path)}
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    events = async_capture_events(hass, EVENT_RESTRUNG)
+
+    assert hass.states.get("sensor.pure_aero_restrings").state == "0"
+    assert hass.states.get("image.pure_aero_photo").state == "unknown"
+
+    photo = tmp_path / "racket.png"
+    photo.write_bytes(PNG)
+
+    # First restring: full bed, with a photo
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {
+            "config_entry_id": entry_id,
+            "date": "2026-09-01",
+            "main_string": "RPM Blast 1.25",
+            "main_tension": 52,
+            "cost": 600,
+            "rating": 3,
+            "notes": "Too stiff",
+            "image": str(photo),
+        },
+        blocking=True,
+        return_response=True,
+    )
+    first_id = resp["restring"]["id"]
+    assert resp["restring"]["image_url"].startswith("/racket_tracker/images/")
+
+    # Second restring: hybrid, photo via media selector style dict is tested below
+    await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {
+            "config_entry_id": entry_id,
+            "date": "2026-11-01",
+            "main_string": "Hyper-G 1.25",
+            "cross_string": "VS Touch 1.30",
+            "main_tension": 50,
+            "cross_tension": 48,
+            "cost": 1200,
+            "stringer": "Pro shop",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert len(events) == 2
+
+    assert (
+        hass.states.get("sensor.pure_aero_strings").state
+        == "Hyper-G 1.25 / VS Touch 1.30"
+    )
+    tension = hass.states.get("sensor.pure_aero_tension")
+    assert (
+        float(tension.state) == 50
+        and tension.attributes["unit_of_measurement"] == "lbs"
+    )
+    assert hass.states.get("sensor.pure_aero_last_restrung").state == "2026-11-01"
+    assert hass.states.get("sensor.pure_aero_days_since_restring").state.isdigit()
+    cost = hass.states.get("sensor.pure_aero_total_string_cost")
+    assert float(cost.state) == 1800 and cost.attributes["unit_of_measurement"] == "THB"
+    assert cost.attributes["average_cost"] == 900
+    hist = hass.states.get("sensor.pure_aero_restrings")
+    assert hist.state == "2" and hist.attributes["history"][1]["id"] == first_id
+
+    # Photo entity shows the most recent restring that has a photo
+    photo_state = hass.states.get("image.pure_aero_photo")
+    assert photo_state.state != "unknown"
+    assert photo_state.attributes["restring_id"] == first_id
+
+    client = await hass_client()
+    r = await client.get(photo_state.attributes["entity_picture"])
+    assert r.status == 200 and await r.read() == PNG
+    # Static URL used by dashboards
+    r = await client.get(hist.attributes["history"][1]["image_url"])
+    assert r.status == 200
+
+    # Update latest (no id): add notes, rating and a photo
+    await hass.services.async_call(
+        DOMAIN,
+        "update_restring",
+        {
+            "config_entry_id": entry_id,
+            "rating": 5,
+            "notes": "Great spin",
+            "image": str(photo),
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    latest = hass.states.get("sensor.pure_aero_strings").attributes
+    assert latest["rating"] == 5 and latest["notes"] == "Great spin"
+    assert latest["image_url"]
+    assert (
+        hass.states.get("image.pure_aero_photo").attributes["restring_id"] != first_id
+    )
+
+    # Remove photo from first restring, then delete it
+    await hass.services.async_call(
+        DOMAIN,
+        "update_restring",
+        {"config_entry_id": entry_id, "restring_id": first_id, "remove_image": True},
+        blocking=True,
+    )
+    images = Path(hass.config.path(DOMAIN, "images"))
+    assert not list(images.glob(f"{first_id}.*"))
+    await hass.services.async_call(
+        DOMAIN,
+        "delete_restring",
+        {"config_entry_id": entry_id, "restring_id": first_id},
+        blocking=True,
+    )
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "get_history",
+        {"config_entry_id": entry_id},
+        blocking=True,
+        return_response=True,
+    )
+    assert resp["restring_count"] == 1 and resp["total_cost"] == 1200
+
+    # History survives a reload
+    await hass.config_entries.async_reload(entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pure_aero_restrings").state == "1"
+
+    # Options flow edits racket details
+    result = await hass.config_entries.options.async_init(entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"brand": "Babolat", "tension_unit": "kg"}
+    )
+    await hass.async_block_till_done()
+    assert (
+        hass.states.get("sensor.pure_aero_tension").attributes["unit_of_measurement"]
+        == "kg"
+    )
+
+    # Removing the racket cleans up photos
+    remaining = [r["image"] for r in resp["restrings"] if r.get("image")]
+    assert remaining
+    await hass.config_entries.async_remove(entry_id)
+    await hass.async_block_till_done()
+    assert not any((images / name).exists() for name in remaining)
+
+
+async def test_bad_image(hass: HomeAssistant, tmp_path: Path) -> None:
+    import pytest
+    from homeassistant.exceptions import ServiceValidationError
+
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_restring",
+            {
+                "config_entry_id": entry_id,
+                "main_string": "X",
+                "main_tension": 50,
+                "image": "/etc/passwd",
+            },
+            blocking=True,
+        )
+    # Today is the default date
+    await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {"config_entry_id": entry_id, "main_string": "X", "main_tension": 50},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pure_aero_days_since_restring").state == "0"
+
+
+async def test_media_browser_photo(hass: HomeAssistant, tmp_path: Path) -> None:
+    """Photo picked from My media in the action form (media selector value)."""
+    (tmp_path / "rackets").mkdir()
+    (tmp_path / "rackets" / "aero.png").write_bytes(PNG)
+    hass.config.media_dirs = {"local": str(tmp_path)}
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {
+            "config_entry_id": entry_id,
+            "main_string": "ALU Power",
+            "main_tension": 53,
+            "image": {
+                "media_content_id": "media-source://media_source/local/rackets/aero.png",
+                "media_content_type": "image/png",
+            },
+        },
+        blocking=True,
+        return_response=True,
+    )
+    assert resp["restring"]["image"].endswith(".png")
+    assert (
+        Path(hass.config.path(DOMAIN, "images")) / resp["restring"]["image"]
+    ).read_bytes() == PNG

@@ -1,0 +1,54 @@
+"""Constants for the Racket String Tracker integration."""
+
+from __future__ import annotations
+
+DOMAIN = "racket_tracker"
+STORAGE_VERSION = 1
+
+# Racket (config entry) options
+CONF_BRAND = "brand"
+CONF_MODEL = "model"
+CONF_HEAD_SIZE = "head_size"
+CONF_STRING_PATTERN = "string_pattern"
+CONF_TENSION_UNIT = "tension_unit"
+
+TENSION_UNIT_LBS = "lbs"
+TENSION_UNIT_KG = "kg"
+TENSION_UNITS = [TENSION_UNIT_LBS, TENSION_UNIT_KG]
+
+# Restring record fields
+ATTR_CONFIG_ENTRY_ID = "config_entry_id"
+ATTR_RESTRING_ID = "restring_id"
+ATTR_DATE = "date"
+ATTR_MAIN_STRING = "main_string"
+ATTR_CROSS_STRING = "cross_string"
+ATTR_MAIN_TENSION = "main_tension"
+ATTR_CROSS_TENSION = "cross_tension"
+ATTR_COST = "cost"
+ATTR_STRINGER = "stringer"
+ATTR_RATING = "rating"
+ATTR_NOTES = "notes"
+ATTR_IMAGE = "image"
+ATTR_IMAGE_URL = "image_url"
+ATTR_REMOVE_IMAGE = "remove_image"
+
+EDITABLE_FIELDS = (
+    ATTR_DATE,
+    ATTR_MAIN_STRING,
+    ATTR_CROSS_STRING,
+    ATTR_MAIN_TENSION,
+    ATTR_CROSS_TENSION,
+    ATTR_COST,
+    ATTR_STRINGER,
+    ATTR_RATING,
+    ATTR_NOTES,
+)
+
+# Services
+SERVICE_ADD_RESTRING = "add_restring"
+SERVICE_UPDATE_RESTRING = "update_restring"
+SERVICE_DELETE_RESTRING = "delete_restring"
+SERVICE_GET_HISTORY = "get_history"
+
+# Events
+EVENT_RESTRUNG = f"{DOMAIN}_restrung"

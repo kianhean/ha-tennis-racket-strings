@@ -1,0 +1,4 @@
+# Pins an exact Home Assistant release; see .github/workflows/tests.yml for the matrix.
+pytest-homeassistant-custom-component
+pytest-cov>=4.1
+ruff==0.14.11

@@ -1,0 +1,119 @@
+# A complete dashboard view for one racket.
+# Dashboard → ✏️ Edit → ⋮ → Raw configuration editor, and paste under `views:`
+# (or add a new view and paste its cards). Replace `pure_aero` with your racket's
+# entity ID prefix (it's the racket name you entered, slugified).
+# Needs the scripts from examples/scripts.yaml.
+
+title: Rackets
+path: rackets
+icon: mdi:tennis
+type: sections
+max_columns: 3
+sections:
+  # ── Current setup ────────────────────────────────────────────────
+  - type: grid
+    cards:
+      - type: heading
+        heading: Pure Aero
+        icon: mdi:tennis
+      - type: picture-entity
+        entity: image.pure_aero_photo
+        show_name: false
+        show_state: false
+        aspect_ratio: "4:3"
+      - type: tile
+        entity: sensor.pure_aero_strings
+        grid_options: { columns: 12 }
+      - type: tile
+        entity: sensor.pure_aero_tension
+        grid_options: { columns: 6 }
+      - type: tile
+        entity: sensor.pure_aero_days_since_restring
+        name: Strings age
+        grid_options: { columns: 6 }
+      - type: tile
+        entity: sensor.pure_aero_last_restrung
+        grid_options: { columns: 6 }
+      - type: tile
+        entity: sensor.pure_aero_total_string_cost
+        name: Total spent
+        grid_options: { columns: 6 }
+      - type: button
+        name: Log restring
+        icon: mdi:plus-circle
+        tap_action:
+          action: more-info
+        entity: script.log_restring
+        grid_options: { columns: 6, rows: 2 }
+      - type: button
+        name: Rate strings
+        icon: mdi:star
+        tap_action:
+          action: more-info
+        entity: script.rate_current_strings
+        grid_options: { columns: 6, rows: 2 }
+
+  # ── Current string notes ─────────────────────────────────────────
+  - type: grid
+    cards:
+      - type: heading
+        heading: Current strings
+      - type: markdown
+        content: >
+          {% set a = states.sensor.pure_aero_strings.attributes %}
+          {% if a.main_string is defined %}
+          **{{ states('sensor.pure_aero_strings') }}**
+          @ {{ a.main_tension }}{% if a.cross_tension != a.main_tension %}/{{ a.cross_tension }}{% endif %}
+          {{ state_attr('sensor.pure_aero_tension', 'unit_of_measurement') }}
+
+          Strung {{ a.date }}{% if a.stringer %} by {{ a.stringer }}{% endif %}
+          {% if a.cost is not none %} · {{ a.cost }} {{ state_attr('sensor.pure_aero_total_string_cost', 'unit_of_measurement') }}{% endif %}
+
+          {% if a.rating %}{{ '⭐' * a.rating }}{% else %}_Not rated yet_{% endif %}
+
+          {{ a.notes or '' }}
+          {% else %}
+          No restrings logged yet.
+          {% endif %}
+      - type: entities
+        title: Specs
+        # Only specs you entered (or that were looked up) exist; remove the rest.
+        state_color: false
+        entities:
+          - sensor.pure_aero_strung_weight
+          - sensor.pure_aero_balance
+          - sensor.pure_aero_swingweight
+          - sensor.pure_aero_stiffness
+          - sensor.pure_aero_recommended_tension_min
+          - sensor.pure_aero_recommended_tension_max
+      - type: history-graph
+        title: Tension over time
+        hours_to_show: 8760
+        entities:
+          - entity: sensor.pure_aero_tension
+
+  # ── Full history with photos ─────────────────────────────────────
+  - type: grid
+    column_span: 3
+    cards:
+      - type: heading
+        heading: Restring history
+      - type: markdown
+        content: >
+          {% set history = state_attr('sensor.pure_aero_restrings', 'history') or [] %}
+          {% set cur = state_attr('sensor.pure_aero_total_string_cost', 'unit_of_measurement') %}
+          {% if history | count == 0 %}
+          No restrings logged yet.
+          {% else %}
+          | Photo | Date | Strings | Tension | Cost | Rating | Notes |
+          |:-:|---|---|---|--:|---|---|
+          {% for r in history -%}
+          | {% if r.image_url %}<a href="{{ r.image_url }}" target="_blank"><img src="{{ r.image_url }}" width="64"></a>{% endif %}
+          | {{ r.date }}
+          | {{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif %}
+          | {{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit }}
+          | {{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is not none else '' }}
+          | {{ '⭐' * r.rating if r.rating else '' }}
+          | {{ (r.notes or '') | replace('\n', ' ') }} |
+          {% endfor %}
+          {% endif %}

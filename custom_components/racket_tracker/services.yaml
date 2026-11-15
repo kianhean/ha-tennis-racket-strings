@@ -1,0 +1,167 @@
+add_restring:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    date:
+      required: false
+      selector:
+        date:
+    main_string:
+      required: true
+      example: "Solinco Hyper-G 1.25"
+      selector:
+        text:
+    main_tension:
+      required: true
+      example: 52
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 0.5
+          mode: box
+    cross_string:
+      required: false
+      example: "Babolat VS Touch 1.30"
+      selector:
+        text:
+    cross_tension:
+      required: false
+      example: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 0.5
+          mode: box
+    cost:
+      required: false
+      example: 35
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.01
+          mode: box
+    stringer:
+      required: false
+      selector:
+        text:
+    rating:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 5
+          step: 1
+          mode: slider
+    notes:
+      required: false
+      selector:
+        text:
+          multiline: true
+    image:
+      required: false
+      selector:
+        media:
+          accept:
+            - image/*
+
+update_restring:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    restring_id:
+      required: false
+      selector:
+        text:
+    date:
+      required: false
+      selector:
+        date:
+    main_string:
+      required: false
+      selector:
+        text:
+    main_tension:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 0.5
+          mode: box
+    cross_string:
+      required: false
+      selector:
+        text:
+    cross_tension:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 0.5
+          mode: box
+    cost:
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.01
+          mode: box
+    stringer:
+      required: false
+      selector:
+        text:
+    rating:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 5
+          step: 1
+          mode: slider
+    notes:
+      required: false
+      selector:
+        text:
+          multiline: true
+    image:
+      required: false
+      selector:
+        media:
+          accept:
+            - image/*
+    remove_image:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+delete_restring:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    restring_id:
+      required: true
+      selector:
+        text:
+
+get_history:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker

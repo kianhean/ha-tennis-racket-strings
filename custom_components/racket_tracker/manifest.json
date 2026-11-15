@@ -1,0 +1,13 @@
+{
+  "domain": "racket_tracker",
+  "name": "Racket String Tracker",
+  "codeowners": ["@kianhean"],
+  "config_flow": true,
+  "dependencies": ["http", "media_source"],
+  "documentation": "https://github.com/kianhean/ha-tennis-racket-strings",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/kianhean/ha-tennis-racket-strings/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

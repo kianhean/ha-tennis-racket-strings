@@ -1,0 +1,108 @@
+# Scripts with fields give you a nice form in the UI (tap the script → fill in → Run).
+# Paste into scripts.yaml, or Settings → Automations & scenes → Scripts → ⋮ → Edit in YAML.
+
+log_restring:
+  alias: Log restring
+  icon: mdi:tennis
+  mode: queued
+  fields:
+    racket:
+      name: Racket
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    date:
+      name: Date (empty = today)
+      selector:
+        date:
+    main_string:
+      name: Main string
+      required: true
+      example: Solinco Hyper-G 1.25
+      selector:
+        text:
+    main_tension:
+      name: Main tension
+      required: true
+      default: 52
+      selector:
+        number: { min: 30, max: 75, step: 0.5, mode: box }
+    cross_string:
+      name: Cross string (hybrid only)
+      selector:
+        text:
+    cross_tension:
+      name: Cross tension (if different)
+      selector:
+        number: { min: 30, max: 75, step: 0.5, mode: box }
+    cost:
+      name: Cost
+      selector:
+        number: { min: 0, max: 10000, step: 1, mode: box }
+    stringer:
+      name: Stringer
+      selector:
+        text:
+    image:
+      name: Photo
+      selector:
+        media:
+          accept:
+            - image/*
+    notes:
+      name: Notes
+      selector:
+        text:
+          multiline: true
+  sequence:
+    - action: racket_tracker.add_restring
+      # Only pass the optional fields that were actually filled in
+      data: >
+        {% set d = {'config_entry_id': racket, 'main_string': main_string,
+                    'main_tension': main_tension} %}
+        {% if date is defined and date %}{% set d = dict(d, date=date) %}{% endif %}
+        {% if cross_string is defined and cross_string %}{% set d = dict(d, cross_string=cross_string) %}{% endif %}
+        {% if cross_tension is defined and cross_tension %}{% set d = dict(d, cross_tension=cross_tension) %}{% endif %}
+        {% if cost is defined and cost is not none %}{% set d = dict(d, cost=cost) %}{% endif %}
+        {% if stringer is defined and stringer %}{% set d = dict(d, stringer=stringer) %}{% endif %}
+        {% if image is defined and image %}{% set d = dict(d, image=image) %}{% endif %}
+        {% if notes is defined and notes %}{% set d = dict(d, notes=notes) %}{% endif %}
+        {{ d }}
+
+rate_current_strings:
+  alias: Rate current strings
+  description: Add a rating / notes (and optionally a photo) to the latest restring after you've played with it.
+  icon: mdi:star-outline
+  mode: queued
+  fields:
+    racket:
+      name: Racket
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    rating:
+      name: Rating
+      required: true
+      default: 4
+      selector:
+        number: { min: 1, max: 5, step: 1, mode: slider }
+    notes:
+      name: Notes
+      selector:
+        text:
+          multiline: true
+    image:
+      name: Photo
+      selector:
+        media:
+          accept:
+            - image/*
+  sequence:
+    - action: racket_tracker.update_restring
+      data: >
+        {% set d = {'config_entry_id': racket, 'rating': rating} %}
+        {% if notes is defined and notes %}{% set d = dict(d, notes=notes) %}{% endif %}
+        {% if image is defined and image %}{% set d = dict(d, image=image) %}{% endif %}
+        {{ d }}

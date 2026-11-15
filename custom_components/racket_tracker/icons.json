@@ -1,0 +1,72 @@
+{
+  "entity": {
+    "image": {
+      "photo": {
+        "default": "mdi:camera"
+      }
+    },
+    "sensor": {
+      "strings": {
+        "default": "mdi:tennis"
+      },
+      "tension": {
+        "default": "mdi:arrow-expand-horizontal"
+      },
+      "last_restrung": {
+        "default": "mdi:calendar-check"
+      },
+      "days_since_restring": {
+        "default": "mdi:timer-sand",
+        "range": {
+          "0": "mdi:timer-sand-empty",
+          "30": "mdi:timer-sand",
+          "90": "mdi:timer-sand-full"
+        }
+      },
+      "restrings": {
+        "default": "mdi:history"
+      },
+      "total_cost": {
+        "default": "mdi:cash-multiple"
+      },
+      "strung_weight": {
+        "default": "mdi:weight-gram"
+      },
+      "unstrung_weight": {
+        "default": "mdi:weight-gram"
+      },
+      "balance": {
+        "default": "mdi:scale-balance"
+      },
+      "swingweight": {
+        "default": "mdi:rotate-right"
+      },
+      "stiffness": {
+        "default": "mdi:arrow-collapse-vertical"
+      },
+      "length": {
+        "default": "mdi:ruler"
+      },
+      "tension_min": {
+        "default": "mdi:arrow-collapse-horizontal"
+      },
+      "tension_max": {
+        "default": "mdi:arrow-expand-horizontal"
+      }
+    }
+  },
+  "services": {
+    "add_restring": {
+      "service": "mdi:tennis"
+    },
+    "update_restring": {
+      "service": "mdi:pencil"
+    },
+    "delete_restring": {
+      "service": "mdi:delete"
+    },
+    "get_history": {
+      "service": "mdi:history"
+    }
+  }
+}

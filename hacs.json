@@ -1,0 +1,7 @@
+{
+  "name": "Racket String Tracker",
+  "content_in_root": false,
+  "zip_release": true,
+  "filename": "racket_tracker.zip",
+  "homeassistant": "2025.7.0"
+}

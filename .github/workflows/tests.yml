@@ -29,8 +29,9 @@ jobs:
           # min_version. 2025.7 is the first with `accept` on the media selector.
           - name: "2025.7.0 (minimum)"
             python-version: "3.13"
+            phcc: "pytest-homeassistant-custom-component==0.13.260"
             # aiodns in HA 2025.7 breaks with pycares 5
-            phcc: "pytest-homeassistant-custom-component==0.13.260 pycares<5"
+            extra: "pycares<5"
             experimental: false
             coverage: false
           - name: "2026.9.4 (stable)"
@@ -54,7 +55,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install Home Assistant test harness
-        run: pip install ${{ matrix.phcc }} "pytest-cov>=4.1"
+        run: pip install "${{ matrix.phcc }}" "pytest-cov>=4.1" ${{ matrix.extra && format('"{0}"', matrix.extra) || '' }}
 
       - name: Show Home Assistant version
         run: python -c "from homeassistant.const import __version__; print(__version__)"

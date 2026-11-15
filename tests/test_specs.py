@@ -126,7 +126,11 @@ async def test_measured_overrides_dataset_and_clearing(hass: HomeAssistant) -> N
 
 async def test_flows_serialize_over_http(hass: HomeAssistant, hass_client) -> None:
     """The forms (with the collapsible specs section) render for the frontend."""
+    # Load the integration (and its http/media_source dependencies) before the
+    # test client starts the web server: routes can't be added after that.
     assert await async_setup_component(hass, "config", {})
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
     client = await hass_client()
     resp = await client.post(
         "/api/config/config_entries/flow", json={"handler": DOMAIN}

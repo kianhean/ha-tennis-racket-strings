@@ -1,4 +1,4 @@
-"""Racket String Tracker: keep a restring history for your tennis rackets."""
+"""Strung (racket_tracker): keep a restring history for your tennis rackets."""
 
 from __future__ import annotations
 

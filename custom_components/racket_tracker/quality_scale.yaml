@@ -92,9 +92,7 @@ rules:
 
   # Platinum
   async-dependency: done
-  inject-websession:
-    status: exempt
-    comment: No HTTP requests.
+  inject-websession: done
   strict-typing:
     status: todo
     comment: Typed throughout, but not checked with mypy in CI yet.

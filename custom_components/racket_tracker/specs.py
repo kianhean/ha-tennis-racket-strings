@@ -1,8 +1,8 @@
 """Racket specs: values from a reference dataset, overridden by your own measurements.
 
 `options["specs"]` holds what the user entered (measured themselves); it always
-wins. `options["dataset_specs"]` is reserved for values looked up from a racket
-dataset; nothing fills it yet, but the merge already treats it as the base layer.
+wins. `options["dataset_specs"]` holds values looked up in the Racqix racket
+dataset (dataset.py); they are the base layer.
 """
 
 from __future__ import annotations

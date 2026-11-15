@@ -1,4 +1,4 @@
-"""Sensors for Racket String Tracker."""
+"""Sensors for Strung."""
 
 from __future__ import annotations
 
@@ -35,9 +35,10 @@ from .const import (
     DOMAIN,
     TENSION_UNIT_LBS,
 )
+from .dataset import ATTRIBUTION
 from .entity import racket_device_info
 from .history import RacketHistory, with_image_url
-from .specs import SPECS, Spec, effective_specs, spec_unit
+from .specs import SOURCE_DATASET, SPECS, Spec, effective_specs, spec_unit
 
 
 def _latest(history: RacketHistory, key: str) -> Any:
@@ -242,3 +243,5 @@ class RacketSpecSensor(SensorEntity):
             )
         self._attr_native_value = value["value"]
         self._attr_extra_state_attributes = {"source": value["source"]}
+        if value["source"] == SOURCE_DATASET:
+            self._attr_attribution = ATTRIBUTION

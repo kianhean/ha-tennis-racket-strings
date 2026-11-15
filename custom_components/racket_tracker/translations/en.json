@@ -3,9 +3,10 @@
     "step": {
       "user": {
         "title": "Add a racket",
-        "description": "Add a racket to track its restring history.",
+        "description": "Add a racket to track its restring history. To fill in its specs automatically, type its brand and model under **Look up**.",
         "data": {
           "name": "Name",
+          "lookup": "Look up",
           "brand": "Brand",
           "model": "Model",
           "head_size": "Head size",
@@ -14,6 +15,7 @@
         },
         "data_description": {
           "name": "A name to tell this racket apart, e.g. \"Pure Aero #1\".",
+          "lookup": "Optional. Search the Racqix racket dataset, e.g. \"pure aero 2023\" or \"blade 98 16x19\".",
           "string_pattern": "e.g. 16x19"
         },
         "sections": {
@@ -42,23 +44,40 @@
             }
           }
         }
+      },
+      "pick": {
+        "title": "Pick your racket",
+        "description": "{count} rackets match \"{query}\" in the {dataset}. Their unstrung weight, balance, swingweight and stiffness become spec sensors; anything you measure yourself overrides them. Leave empty to skip.",
+        "data": {
+          "racquet": "Racket"
+        }
       }
     },
     "error": {
       "name_required": "Please enter a name.",
-      "tension_range": "Minimum tension must not be above the maximum."
+      "tension_range": "Minimum tension must not be above the maximum.",
+      "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
+      "no_match": "No racket matches that. Try fewer words, e.g. just the model."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Racket details",
+        "description": "Specs looked up from the racket dataset: {dataset_racket}. Search again under **Look up** to change it.",
         "data": {
+          "lookup": "Look up",
           "brand": "Brand",
           "model": "Model",
           "head_size": "Head size",
           "string_pattern": "String pattern",
-          "tension_unit": "Tension unit"
+          "tension_unit": "Tension unit",
+          "use_dataset": "Use looked-up specs"
+        },
+        "data_description": {
+          "lookup": "Optional. Search the Racqix racket dataset, e.g. \"pure aero 2023\" or \"blade 98 16x19\".",
+          "string_pattern": "e.g. 16x19",
+          "use_dataset": "Turn off to stop using the dataset values for this racket."
         },
         "sections": {
           "specs": {
@@ -86,10 +105,19 @@
             }
           }
         }
+      },
+      "pick": {
+        "title": "Pick your racket",
+        "description": "{count} rackets match \"{query}\" in the {dataset}. Their unstrung weight, balance, swingweight and stiffness become spec sensors; anything you measure yourself overrides them. Leave empty to keep things as they are.",
+        "data": {
+          "racquet": "Racket"
+        }
       }
     },
     "error": {
-      "tension_range": "Minimum tension must not be above the maximum."
+      "tension_range": "Minimum tension must not be above the maximum.",
+      "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
+      "no_match": "No racket matches that. Try fewer words, e.g. just the model."
     }
   },
   "selector": {

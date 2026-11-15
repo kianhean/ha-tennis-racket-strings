@@ -1,1 +1,1 @@
-"""Tests for Racket String Tracker."""
+"""Tests for Strung."""

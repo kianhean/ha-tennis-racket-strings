@@ -36,9 +36,10 @@
 
 | | | |
 |---|---|---|
+| 🔔 **Restring due**<br>Restring after N days, N hours of play, or when the estimated tension drops to a set value: a [due sensor and a calendar](#restring-due) | 🔁 **Usual setup**<br>Save your usual string job and [log it in one tap](#usual-setup) | 📅 **Calendar**<br>Every restring, and the next one due, in HA's calendar |
 | 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>Set hours of play per week and see roughly what tension the strings are at now |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
-| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring reminders, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The only network request is the optional racket lookup |
+| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The only network request is the optional racket lookup |
 
 ## Installation
 
@@ -71,13 +72,15 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 | String pattern | `16x20` | |
 | Tension unit | lbs or kg | Used for every tension on this racket: restrings, recommended range and estimates |
 | **Play and tension loss** *(optional, collapsed)* | `4` h/week | Turns on the [tension estimate](#estimated-tension) |
+| **Restring reminder** *(optional, collapsed)* | `60` days | Turns on [Restring due](#restring-due) |
+| **Usual setup** *(optional, collapsed)* | `RPM Blast` @ `52` | For [one-tap restrings](#usual-setup) |
 | **Specs** *(optional, collapsed)* | see [Racket specs](#racket-specs) | Your own measurements |
 
 If you filled in **Look up**, the next step lists the matching rackets. Pick yours, or leave it empty
 to skip. Brand, model, head size and string pattern you left blank come from the dataset.
 
 Repeat for each racket. To change the details or specs later, or to look the racket up later, click
-**Configure** on the racket.
+**Configure** on the racket. To rename it, use **⋮ → Reconfigure** (entity IDs keep their names).
 
 ### Removing a racket
 
@@ -95,6 +98,17 @@ then remove it in HACS and restart.
 3. After a few hitting sessions, run **Rate current strings** to add a rating and notes to the latest restring.
 
 The [example dashboard](#dashboard) has a button for each.
+
+### Usual setup
+
+Save the string job you always get under **Configure → Usual setup**: main string and tension, and
+optionally crosses, stringer and cost. Then **Restring with usual setup**
+(`button.<racket>_restring_with_usual_setup`) logs it for today in one tap. Without a usual setup,
+the button repeats the latest restring's strings, tensions, stringer and cost. Rating, notes and
+photo are not copied.
+
+`racket_tracker.repeat_restring` does the same from scripts. It also takes `date`, `cost`,
+`stringer`, `notes` and `image`, or a `restring_id` to copy a particular past restring.
 
 ### With the action
 
@@ -204,6 +218,34 @@ racket's unit; `strung_tension`, `estimated_cross_tension`), **Estimated tension
 **Hours played**. Clear the hours to remove them. To get a reminder, trigger an automation on
 **Estimated tension loss** going above, say, 25 %.
 
+## Restring due
+
+Under **Restring reminder** (when adding the racket or under **Configure**), set one or more rules.
+The earliest one wins:
+
+| Rule | Example | Needs |
+|---|---|---|
+| Restring after (days) | `60` | — |
+| Restring after (hours of play) | `40` | Hours of play per week |
+| Restring when estimated tension drops to | `44` (the racket's unit) | Hours of play per week |
+
+Then you get:
+
+- `binary_sensor.<racket>_restring_due`: **Due** from the due date on, until you log a restring.
+  Attributes: `due_date`, `days_until_due` (negative when overdue) and `reason` (`days`,
+  `hours_played` or `min_tension`). It's unknown before the first restring.
+- `sensor.<racket>_next_restring`: the due date.
+- A **Restring due** event in `calendar.<racket>_restrings`.
+
+Clear the rules to remove the sensors. The [Restring due blueprint](#one-click-blueprints) notifies
+you when it turns on.
+
+### Calendar
+
+`calendar.<racket>_restrings` always exists. It has an all-day event for every restring (strings,
+tensions, stringer, cost, rating and notes) and, with a rule set, one for the next restring due. Add
+it to a **Calendar** card, or use it in calendar triggers. Event text is in English.
+
 ## Recipes
 
 ### One-click blueprints
@@ -213,7 +255,8 @@ drop-down. For the notify action, enter your phone's, for example `notify.mobile
 
 | Blueprint | What it does | |
 |---|---|---|
-| ⏳ **Restring reminder** | Notify when a racket's strings reach an age you choose | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_reminder.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_reminder.yaml blueprint"></a> |
+| 🔔 **Restring due** | Notify when a racket's [Restring due](#restring-due) sensor turns on, and say why | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_due.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_due.yaml blueprint"></a> |
+| ⏳ **Restring reminder** | Notify when a racket's strings reach an age you choose (no rules needed) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_reminder.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_reminder.yaml blueprint"></a> |
 | 📸 **Restring logged** | A notification, with the photo, every time a restring is logged (one racket or all) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_logged.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_logged.yaml blueprint"></a> |
 | ⭐ **Rate your strings** | A few days after a restring, remind you to rate it if you haven't | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frate_strings.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the rate_strings.yaml blueprint"></a> |
 
@@ -304,6 +347,10 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `sensor.<racket>_estimated_tension` | `42.6` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, play settings. Only with [hours per week](#estimated-tension) |
 | `sensor.<racket>_estimated_tension_loss` | `18` % | play settings |
 | `sensor.<racket>_hours_played` | `8` h | Since the latest restring |
+| `sensor.<racket>_next_restring` | `2027-01-14` | Only with a [restring rule](#restring-due) |
+| `binary_sensor.<racket>_restring_due` | on (Due) / off | `due_date`, `days_until_due`, `reason`. Only with a restring rule |
+| `calendar.<racket>_restrings` | on during a restring / due day | Events: every restring and the next one due |
+| `button.<racket>_restring_with_usual_setup` | time last pressed | Logs the [usual setup](#usual-setup) for today |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |
 | `sensor.<racket>_<spec>` | see [Racket specs](#racket-specs) | `source`: `measured` / `dataset` |
 
@@ -312,6 +359,7 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | Action | What it does | Response |
 |---|---|---|
 | `racket_tracker.add_restring` | Log a restring | Optional: the new restring, including its `id` |
+| `racket_tracker.repeat_restring` | Log a restring with the usual setup, or copy a past one (`restring_id`) | Optional: the new restring |
 | `racket_tracker.update_restring` | Change any field; add, replace or remove the photo. **Leave `restring_id` empty to edit the latest restring.** | Optional: the updated restring |
 | `racket_tracker.delete_restring` | Delete a restring and its photo | — |
 | `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `restrings[]` |
@@ -320,7 +368,7 @@ Restring IDs are in the `history` attribute and in the action responses.
 
 ### Event
 
-`racket_tracker_restrung` fires after every `add_restring`. Its data has `config_entry_id`, `racket`
+`racket_tracker_restrung` fires after every `add_restring`, `repeat_restring` and button press. Its data has `config_entry_id`, `racket`
 and every restring field, including `image_url`.
 
 ## Troubleshooting

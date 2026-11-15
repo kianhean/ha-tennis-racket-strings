@@ -14,6 +14,7 @@ and gut hold tension better, so lower them for those.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -49,7 +50,7 @@ class Estimate:
     cross_tension: float | None
 
 
-def play_settings(options: dict[str, Any]) -> PlaySettings | None:
+def play_settings(options: Mapping[str, Any]) -> PlaySettings | None:
     """The racket's play settings, or None if hours per week isn't set."""
     play = options.get(CONF_PLAY) or {}
     hours = play.get(CONF_HOURS_PER_WEEK)

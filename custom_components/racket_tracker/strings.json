@@ -33,6 +33,37 @@
               "tension_loss_per_hour": "Lost for each hour you play. Default 1%."
             }
           },
+          "due": {
+            "name": "Restring reminder (optional)",
+            "description": "When the strings are due. The earliest rule wins. Hours of play and estimated tension need hours of play per week.",
+            "data": {
+              "days": "Restring after (days)",
+              "hours_played": "Restring after (hours of play)",
+              "min_tension": "Restring when estimated tension drops to"
+            },
+            "data_description": {
+              "days": "e.g. 60.",
+              "hours_played": "e.g. 40.",
+              "min_tension": "In this racket's tension unit, e.g. 44."
+            }
+          },
+          "setup": {
+            "name": "Usual setup (optional)",
+            "description": "Your usual string job. **Restring with usual setup** logs it in one tap; without it, the last restring is repeated.",
+            "data": {
+              "main_string": "Main string",
+              "main_tension": "Main tension",
+              "cross_string": "Cross string",
+              "cross_tension": "Cross tension",
+              "stringer": "Stringer",
+              "cost": "Cost"
+            },
+            "data_description": {
+              "main_tension": "In this racket's tension unit.",
+              "cross_string": "Hybrids only. Defaults to the main string.",
+              "cross_tension": "Defaults to the main tension."
+            }
+          },
           "specs": {
             "name": "Specs (optional)",
             "description": "Values you measured yourself. These override any looked-up values.",
@@ -65,13 +96,25 @@
         "data": {
           "racquet": "Racket"
         }
+      },
+      "reconfigure": {
+        "title": "Rename racket",
+        "description": "Entity IDs keep their current names.",
+        "data": {
+          "name": "Name"
+        }
       }
     },
     "error": {
       "name_required": "Please enter a name.",
       "tension_range": "Minimum tension must not be above the maximum.",
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
-      "no_match": "No racket matches that. Try fewer words, e.g. just the model."
+      "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
+      "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
+      "setup_incomplete": "The usual setup needs at least a main string and a main tension."
+    },
+    "abort": {
+      "reconfigure_successful": "The racket was renamed."
     }
   },
   "options": {
@@ -106,6 +149,37 @@
               "hours_per_week": "Average, e.g. 4.",
               "initial_tension_loss": "Lost in the first day after stringing, before you play. Default 10%.",
               "tension_loss_per_hour": "Lost for each hour you play. Default 1%."
+            }
+          },
+          "due": {
+            "name": "Restring reminder (optional)",
+            "description": "When the strings are due. The earliest rule wins. Hours of play and estimated tension need hours of play per week.",
+            "data": {
+              "days": "Restring after (days)",
+              "hours_played": "Restring after (hours of play)",
+              "min_tension": "Restring when estimated tension drops to"
+            },
+            "data_description": {
+              "days": "e.g. 60.",
+              "hours_played": "e.g. 40.",
+              "min_tension": "In this racket's tension unit, e.g. 44."
+            }
+          },
+          "setup": {
+            "name": "Usual setup (optional)",
+            "description": "Your usual string job. **Restring with usual setup** logs it in one tap; without it, the last restring is repeated.",
+            "data": {
+              "main_string": "Main string",
+              "main_tension": "Main tension",
+              "cross_string": "Cross string",
+              "cross_tension": "Cross tension",
+              "stringer": "Stringer",
+              "cost": "Cost"
+            },
+            "data_description": {
+              "main_tension": "In this racket's tension unit.",
+              "cross_string": "Hybrids only. Defaults to the main string.",
+              "cross_tension": "Defaults to the main tension."
             }
           },
           "specs": {
@@ -145,7 +219,9 @@
     "error": {
       "tension_range": "Minimum tension must not be above the maximum.",
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
-      "no_match": "No racket matches that. Try fewer words, e.g. just the model."
+      "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
+      "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
+      "setup_incomplete": "The usual setup needs at least a main string and a main tension."
     }
   },
   "selector": {
@@ -157,6 +233,46 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "restring_due": {
+        "name": "Restring due",
+        "state": {
+          "on": "Due",
+          "off": "Not due"
+        },
+        "state_attributes": {
+          "due_date": {
+            "name": "Due date"
+          },
+          "days_until_due": {
+            "name": "Days until due"
+          },
+          "reason": {
+            "name": "Reason",
+            "state": {
+              "days": "Days since restring",
+              "hours_played": "Hours played",
+              "min_tension": "Estimated tension"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "repeat_restring": {
+        "name": "Restring with usual setup"
+      }
+    },
+    "calendar": {
+      "restrings": {
+        "name": "Restrings"
+      }
+    },
+    "image": {
+      "photo": {
+        "name": "Photo"
+      }
+    },
     "sensor": {
       "strings": {
         "name": "Strings"
@@ -169,6 +285,9 @@
       },
       "days_since_restring": {
         "name": "Days since restring"
+      },
+      "next_restring": {
+        "name": "Next restring"
       },
       "restrings": {
         "name": "Restrings"
@@ -209,11 +328,6 @@
       "tension_max": {
         "name": "Recommended tension (max)"
       }
-    },
-    "image": {
-      "photo": {
-        "name": "Photo"
-      }
     }
   },
   "exceptions": {
@@ -231,6 +345,9 @@
     },
     "invalid_image": {
       "message": "Couldn't use that image: {reason}."
+    },
+    "no_setup": {
+      "message": "Racket {racket} has no usual setup and no restrings to repeat."
     }
   },
   "services": {
@@ -273,6 +390,40 @@
         "rating": {
           "name": "Rating",
           "description": "How much you liked this setup, 1–5."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "What you liked or didn't like."
+        },
+        "image": {
+          "name": "Photo",
+          "description": "A photo of the racket with this string job. Pick or upload one in My media."
+        }
+      }
+    },
+    "repeat_restring": {
+      "name": "Repeat restring",
+      "description": "Log a restring with the racket's usual setup, or the same strings and tensions as a past restring (the latest if it has no usual setup).",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket that was restrung."
+        },
+        "restring_id": {
+          "name": "Copy restring",
+          "description": "ID of a past restring to copy. Leave empty for the usual setup."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Date of the restring. Defaults to today."
+        },
+        "cost": {
+          "name": "Cost",
+          "description": "What the restring cost, if different."
+        },
+        "stringer": {
+          "name": "Stringer",
+          "description": "Who strung it, if different."
         },
         "notes": {
           "name": "Notes",

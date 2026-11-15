@@ -34,16 +34,20 @@ jobs:
             extra: "pycares<5"
             experimental: false
             coverage: false
+            mypy: false
           - name: "2026.9.4 (stable)"
             python-version: "3.14"
             phcc: "pytest-homeassistant-custom-component==0.13.367"
             experimental: false
             coverage: true
+            # Type-check against the HA version users run (strict-typing rule)
+            mypy: true
           - name: "latest (incl. beta)"
             python-version: "3.14"
             phcc: "pytest-homeassistant-custom-component"
             experimental: true
             coverage: false
+            mypy: false
 
     steps:
       - name: Checkout
@@ -59,6 +63,10 @@ jobs:
 
       - name: Show Home Assistant version
         run: python -c "from homeassistant.const import __version__; print(__version__)"
+
+      - name: Type check
+        if: matrix.mypy
+        run: pip install "mypy==2.4.1" && mypy
 
       - name: Run tests
         run: pytest tests -v --cov=custom_components/racket_tracker --cov-report=term-missing --cov-report=xml

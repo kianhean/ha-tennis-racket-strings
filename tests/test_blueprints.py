@@ -73,7 +73,12 @@ async def _restring(hass: HomeAssistant, entry_id: str, **data) -> None:
 
 
 def test_every_blueprint_is_tested() -> None:
-    tested = {"restring_reminder.yaml", "restring_logged.yaml", "rate_strings.yaml"}
+    tested = {
+        "restring_reminder.yaml",
+        "restring_due.yaml",
+        "restring_logged.yaml",
+        "rate_strings.yaml",
+    }
     assert {p.name for p in BLUEPRINTS.glob("*.yaml")} == tested
 
 
@@ -106,6 +111,45 @@ async def test_restring_reminder(hass: HomeAssistant, notify_calls) -> None:
     await hass.async_block_till_done()
     assert len(notify_calls) == 1
     assert notify_calls[0].data["message"] == "Pure Aero's strings are 60 days old."
+
+
+async def test_restring_due(hass: HomeAssistant, notify_calls) -> None:
+    entry_id = await _add_racket(hass)
+    result = await hass.config_entries.options.async_init(entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "tension_unit": "lbs",
+            "play": {"hours_per_week": 7},
+            "due": {"days": 90, "min_tension": 40},
+        },
+    )
+    await hass.async_block_till_done()
+    await _automation(
+        hass,
+        "restring_due.yaml",
+        {"due_sensor": "binary_sensor.pure_aero_restring_due"},
+    )
+    await _restring(
+        hass, entry_id, date=(dt_util.now().date() - timedelta(days=5)).isoformat()
+    )
+    assert notify_calls == []
+
+    # 52 → 40 lbs is 23.1 % loss: 10 % at once, then 13.1 h at 1 %/h → day 14
+    await hass.services.async_call(
+        DOMAIN,
+        "update_restring",
+        {
+            "config_entry_id": entry_id,
+            "date": (dt_util.now().date() - timedelta(days=14)).isoformat(),
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert len(notify_calls) == 1
+    assert notify_calls[0].data["message"] == (
+        "Pure Aero's strings are estimated to be down to the tension you set."
+    )
 
 
 async def test_restring_logged(hass: HomeAssistant, notify_calls) -> None:

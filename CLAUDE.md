@@ -13,19 +13,23 @@ custom_components/racket_tracker/
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
 ├── tension.py         # Estimated tension: options["play"] (hours/week, initial loss, loss/hour) → estimate()
+├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
-├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible "specs"); options flow edits them
-├── entity.py          # racket_device_info(entry)
-├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), one RacketSpecSensor per spec
+├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible play/due/setup/specs); options flow edits them; reconfigure renames
+├── entity.py          # racket_device_info(entry), DailyRacketEntity (history + midnight), async_remove_entity
+├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), next_restring (only with due rules), one RacketSpecSensor per spec
+├── binary_sensor.py   # restring_due (only with due rules)
+├── calendar.py        # calendar.<racket>_restrings: all-day event per restring + next due
+├── button.py          # Restring with usual setup → usual_setup() + async_log_restring()
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
-├── services.yaml      # add_restring, update_restring, delete_restring, get_history
+├── services.yaml      # add_restring, repeat_restring, update_restring, delete_restring, get_history
 ├── icons.json         # Entity + action icons (no _attr_icon in code)
 ├── strings.json       # Source strings; translations/en.json must be identical
 ├── quality_scale.yaml # Self-assessment; keep it honest
 └── brand/             # icon/logo PNGs loaded by HA 2026.3+ and checked by hacs/action. Do not delete.
 
-blueprints/automation/racket_tracker/  # restring_reminder, restring_logged, rate_strings
+blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings
 examples/              # scripts.yaml (form UI), dashboard.yaml (built-in cards only)
 images/brand/*.svg     # Sources for brand/*.png (render with rsvg-convert, trim with ImageMagick)
 images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml (light + dark)
@@ -49,6 +53,12 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   blank. Changing options reloads the entry.
 - `play` (optional section): `hours_per_week`, `initial_tension_loss` (default 10 %),
   `tension_loss_per_hour` (default 1 %). Without hours/week the estimate sensors are removed.
+- `due` (optional section): `days`, `hours_played`, `min_tension` (racket unit); earliest wins.
+  `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
+  due binary sensor and next_restring sensor are removed.
+- `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,
+  `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
+  button use it, else the latest restring. All logging goes through `async_log_restring()`.
 - The dataset (`https://www.racqix.com/api/racquets?mode=minimal`) is the integration's only
   network request; tests mock it with `aioclient_mock`.
 
@@ -72,6 +82,7 @@ HA doesn't show racket length in mm. Older HA rejects a suggested unit when ther
 ```bash
 pip install -r requirements_test.txt && pytest
 ruff check custom_components/ tests/ --fix && ruff format custom_components/ tests/
+mypy   # strict, config in mypy.ini; CI runs it on the stable HA only
 ```
 
 CI (`tests.yml`) runs the minimum HA (2025.7.0, harness 0.13.260, plus `pycares<5`), stable

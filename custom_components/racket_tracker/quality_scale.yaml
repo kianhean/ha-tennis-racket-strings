@@ -7,7 +7,7 @@ rules:
   action-setup: done
   appropriate-polling:
     status: exempt
-    comment: Nothing is polled; entities update when the history changes (and at midnight for the age).
+    comment: Nothing is polled; entities update when the history changes (and just after midnight for dates and estimates).
   brands: done
   common-modules: done
   config-flow: done
@@ -81,8 +81,8 @@ rules:
   exception-translations: done
   icon-translations: done
   reconfiguration-flow:
-    status: todo
-    comment: Racket details are edited in the options flow instead.
+    status: done
+    comment: Reconfigure renames the racket; its details are edited in the options flow.
   repair-issues:
     status: exempt
     comment: Nothing for the user to repair.
@@ -94,5 +94,5 @@ rules:
   async-dependency: done
   inject-websession: done
   strict-typing:
-    status: todo
-    comment: Typed throughout, but not checked with mypy in CI yet.
+    status: done
+    comment: mypy --strict (mypy.ini) runs in CI against the stable Home Assistant.

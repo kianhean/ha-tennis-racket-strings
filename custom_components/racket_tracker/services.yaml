@@ -70,6 +70,45 @@ add_restring:
           accept:
             - image/*
 
+repeat_restring:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    restring_id:
+      required: false
+      selector:
+        text:
+    date:
+      required: false
+      selector:
+        date:
+    cost:
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.01
+          mode: box
+    stringer:
+      required: false
+      selector:
+        text:
+    notes:
+      required: false
+      selector:
+        text:
+          multiline: true
+    image:
+      required: false
+      selector:
+        media:
+          accept:
+            - image/*
+
 update_restring:
   fields:
     config_entry_id:

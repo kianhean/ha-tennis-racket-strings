@@ -241,3 +241,24 @@ async def test_media_browser_photo(hass: HomeAssistant, tmp_path: Path) -> None:
     assert (
         Path(hass.config.path(DOMAIN, "images")) / resp["restring"]["image"]
     ).read_bytes() == PNG
+
+
+async def test_diagnostics(hass: HomeAssistant) -> None:
+    from custom_components.racket_tracker.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {"config_entry_id": entry_id, "main_string": "X", "main_tension": 50},
+        blocking=True,
+    )
+    diag = await async_get_config_entry_diagnostics(
+        hass, hass.config_entries.async_get_entry(entry_id)
+    )
+    assert diag["title"] == "Pure Aero"
+    assert diag["options"]["brand"] == "Babolat"
+    assert diag["restring_count"] == 1 and diag["restrings"][0]["main_string"] == "X"

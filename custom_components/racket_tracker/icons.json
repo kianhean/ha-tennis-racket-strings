@@ -1,5 +1,23 @@
 {
   "entity": {
+    "binary_sensor": {
+      "restring_due": {
+        "default": "mdi:calendar-clock",
+        "state": {
+          "on": "mdi:calendar-alert"
+        }
+      }
+    },
+    "button": {
+      "repeat_restring": {
+        "default": "mdi:repeat"
+      }
+    },
+    "calendar": {
+      "restrings": {
+        "default": "mdi:calendar-multiple"
+      }
+    },
     "image": {
       "photo": {
         "default": "mdi:camera"
@@ -22,6 +40,9 @@
           "30": "mdi:timer-sand",
           "90": "mdi:timer-sand-full"
         }
+      },
+      "next_restring": {
+        "default": "mdi:calendar-arrow-right"
       },
       "restrings": {
         "default": "mdi:history"
@@ -67,6 +88,9 @@
   "services": {
     "add_restring": {
       "service": "mdi:tennis"
+    },
+    "repeat_restring": {
+      "service": "mdi:repeat"
     },
     "update_restring": {
       "service": "mdi:pencil"

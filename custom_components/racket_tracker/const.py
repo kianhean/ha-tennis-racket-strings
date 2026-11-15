@@ -12,6 +12,9 @@ CONF_HEAD_SIZE = "head_size"
 CONF_STRING_PATTERN = "string_pattern"
 CONF_TENSION_UNIT = "tension_unit"
 
+# The racket's usual setup (option section), used by repeat_restring
+CONF_SETUP = "setup"
+
 TENSION_UNIT_LBS = "lbs"
 TENSION_UNIT_KG = "kg"
 TENSION_UNITS = [TENSION_UNIT_LBS, TENSION_UNIT_KG]
@@ -44,11 +47,22 @@ EDITABLE_FIELDS = (
     ATTR_NOTES,
 )
 
+# Fields a repeated restring copies from the usual setup or a past restring
+SETUP_FIELDS = (
+    ATTR_MAIN_STRING,
+    ATTR_MAIN_TENSION,
+    ATTR_CROSS_STRING,
+    ATTR_CROSS_TENSION,
+    ATTR_STRINGER,
+    ATTR_COST,
+)
+
 # Services
 SERVICE_ADD_RESTRING = "add_restring"
 SERVICE_UPDATE_RESTRING = "update_restring"
 SERVICE_DELETE_RESTRING = "delete_restring"
 SERVICE_GET_HISTORY = "get_history"
+SERVICE_REPEAT_RESTRING = "repeat_restring"
 
 # Events
 EVENT_RESTRUNG = f"{DOMAIN}_restrung"

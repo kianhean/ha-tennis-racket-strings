@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
@@ -14,6 +19,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -21,9 +27,16 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    ATTR_COST,
+    ATTR_CROSS_STRING,
+    ATTR_CROSS_TENSION,
+    ATTR_MAIN_STRING,
+    ATTR_MAIN_TENSION,
+    ATTR_STRINGER,
     CONF_BRAND,
     CONF_HEAD_SIZE,
     CONF_MODEL,
+    CONF_SETUP,
     CONF_STRING_PATTERN,
     CONF_TENSION_UNIT,
     DOMAIN,
@@ -38,6 +51,13 @@ from .dataset import (
     async_get_dataset,
     label,
     search,
+)
+from .due import (
+    CONF_DUE,
+    CONF_DUE_DAYS,
+    CONF_DUE_HOURS,
+    CONF_DUE_TENSION,
+    PLAY_RULES,
 )
 from .specs import CONF_DATASET_SPECS, CONF_SPECS, SPECS
 from .tension import (
@@ -93,14 +113,16 @@ RACKET_DETAILS_SCHEMA = vol.Schema(
 )
 
 
-def _number(low: float, high: float, step: float, unit: str) -> NumberSelector:
+def _number(
+    low: float, high: float, step: float, unit: str | None = None
+) -> NumberSelector:
     return NumberSelector(
         NumberSelectorConfig(
             min=low,
             max=high,
             step=step,
             mode=NumberSelectorMode.BOX,
-            unit_of_measurement=unit,
+            **({"unit_of_measurement": unit} if unit else {}),
         )
     )
 
@@ -114,12 +136,40 @@ PLAY_SCHEMA = vol.Schema(
     }
 )
 
+# When to restring; enables the restring due and next restring entities.
+DUE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_DUE_DAYS): _number(1, 730, 1, "d"),
+        vol.Optional(CONF_DUE_HOURS): _number(1, 500, 1, "h"),
+        # Tensions are in the racket's tension unit
+        vol.Optional(CONF_DUE_TENSION): _number(1, 100, 0.5),
+    }
+)
+
+# The usual string job, for one-tap restrings (button / repeat_restring).
+SETUP_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_MAIN_STRING): TextSelector(),
+        vol.Optional(ATTR_MAIN_TENSION): _number(1, 100, 0.5),
+        vol.Optional(ATTR_CROSS_STRING): TextSelector(),
+        vol.Optional(ATTR_CROSS_TENSION): _number(1, 100, 0.5),
+        vol.Optional(ATTR_STRINGER): TextSelector(),
+        vol.Optional(ATTR_COST): _number(0, 10000, 0.01),
+    }
+)
+
+SECTIONS = (CONF_PLAY, CONF_DUE, CONF_SETUP)
+
 RACKET_DETAILS_SCHEMA = RACKET_DETAILS_SCHEMA.extend(
     {
         vol.Optional(CONF_PLAY): section(PLAY_SCHEMA, {"collapsed": True}),
+        vol.Optional(CONF_DUE): section(DUE_SCHEMA, {"collapsed": True}),
+        vol.Optional(CONF_SETUP): section(SETUP_SCHEMA, {"collapsed": True}),
         vol.Optional(CONF_SPECS): section(SPECS_SCHEMA, {"collapsed": True}),
     }
 )
+
+RENAME_SCHEMA = vol.Schema({vol.Required(CONF_NAME): TextSelector()})
 
 LOOKUP_SCHEMA = vol.Schema({vol.Optional(CONF_LOOKUP): TextSelector()})
 
@@ -131,18 +181,28 @@ USER_SCHEMA = (
 
 
 def _clean(user_input: dict[str, Any], errors: dict[str, str]) -> dict[str, Any]:
-    """Drop empty specs and check the tension range."""
+    """Drop empty values and check the sections fit together."""
     data = dict(user_input)
     specs = {k: v for k, v in (data.get(CONF_SPECS) or {}).items() if v is not None}
     data[CONF_SPECS] = specs
-    play = {k: v for k, v in (data.get(CONF_PLAY) or {}).items() if v is not None}
-    if play:
-        data[CONF_PLAY] = play
-    else:
-        data.pop(CONF_PLAY, None)
+    for key in SECTIONS:
+        values = {
+            k: v.strip() if isinstance(v, str) else v
+            for k, v in (data.get(key) or {}).items()
+        }
+        if values := {k: v for k, v in values.items() if v not in (None, "")}:
+            data[key] = values
+        else:
+            data.pop(key, None)
     low, high = specs.get("tension_min"), specs.get("tension_max")
     if low is not None and high is not None and low > high:
         errors["base"] = "tension_range"
+    hours = (data.get(CONF_PLAY) or {}).get(CONF_HOURS_PER_WEEK)
+    if not hours and any(k in PLAY_RULES for k in data.get(CONF_DUE) or {}):
+        errors["base"] = "due_needs_play"
+    setup = data.get(CONF_SETUP) or {}
+    if setup and not (setup.get(ATTR_MAIN_STRING) and setup.get(ATTR_MAIN_TENSION)):
+        errors["base"] = "setup_incomplete"
     return data
 
 
@@ -168,11 +228,11 @@ class _LookupMixin:
         return bool(self._matches)
 
     def _pick_form(self, step_id: str) -> ConfigFlowResult:
-        options = [
-            {"value": racquet["slug"], "label": label(racquet)}
+        options: list[SelectOptionDict] = [
+            SelectOptionDict(value=racquet["slug"], label=label(racquet))
             for racquet in self._matches
         ]
-        return self.async_show_form(  # type: ignore[attr-defined]
+        return self.async_show_form(  # type: ignore[attr-defined,no-any-return]
             step_id=step_id,
             data_schema=vol.Schema(
                 {
@@ -244,9 +304,27 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
         options = self._picked(user_input) or self._options
         return self.async_create_entry(title=self._name, data={}, options=options)
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Rename the racket."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if name := user_input[CONF_NAME].strip():
+                return self.async_update_reload_and_abort(entry, title=name)
+            errors[CONF_NAME] = "name_required"
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                RENAME_SCHEMA, user_input or {CONF_NAME: entry.title}
+            ),
+            errors=errors,
+        )
+
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry) -> RacketOptionsFlow:
+    def async_get_options_flow(config_entry: ConfigEntry) -> RacketOptionsFlow:
         """Return the options flow."""
         return RacketOptionsFlow()
 

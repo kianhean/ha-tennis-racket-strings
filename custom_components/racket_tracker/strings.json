@@ -1,0 +1,305 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a racket",
+        "description": "Add a racket to track its restring history.",
+        "data": {
+          "name": "Name",
+          "brand": "Brand",
+          "model": "Model",
+          "head_size": "Head size",
+          "string_pattern": "String pattern",
+          "tension_unit": "Tension unit"
+        },
+        "data_description": {
+          "name": "A name to tell this racket apart, e.g. \"Pure Aero #1\".",
+          "string_pattern": "e.g. 16x19"
+        },
+        "sections": {
+          "specs": {
+            "name": "Specs (optional)",
+            "description": "Values you measured yourself. These override any looked-up values.",
+            "data": {
+              "strung_weight": "Strung weight",
+              "unstrung_weight": "Unstrung weight",
+              "balance": "Balance",
+              "swingweight": "Swingweight",
+              "stiffness": "Stiffness",
+              "length": "Length",
+              "tension_min": "Recommended tension (min)",
+              "tension_max": "Recommended tension (max)"
+            },
+            "data_description": {
+              "strung_weight": "Grams, with strings, grip and dampener as you play it.",
+              "unstrung_weight": "Grams, frame only.",
+              "balance": "Millimetres from the butt cap (e.g. 320 mm).",
+              "swingweight": "In kg·cm², e.g. 320.",
+              "stiffness": "RA, e.g. 66.",
+              "length": "Inches, e.g. 27.",
+              "tension_min": "In this racket's tension unit.",
+              "tension_max": "In this racket's tension unit."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "name_required": "Please enter a name.",
+      "tension_range": "Minimum tension must not be above the maximum."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Racket details",
+        "data": {
+          "brand": "Brand",
+          "model": "Model",
+          "head_size": "Head size",
+          "string_pattern": "String pattern",
+          "tension_unit": "Tension unit"
+        },
+        "sections": {
+          "specs": {
+            "name": "Specs (optional)",
+            "description": "Values you measured yourself. These override any looked-up values.",
+            "data": {
+              "strung_weight": "Strung weight",
+              "unstrung_weight": "Unstrung weight",
+              "balance": "Balance",
+              "swingweight": "Swingweight",
+              "stiffness": "Stiffness",
+              "length": "Length",
+              "tension_min": "Recommended tension (min)",
+              "tension_max": "Recommended tension (max)"
+            },
+            "data_description": {
+              "strung_weight": "Grams, with strings, grip and dampener as you play it.",
+              "unstrung_weight": "Grams, frame only.",
+              "balance": "Millimetres from the butt cap (e.g. 320 mm).",
+              "swingweight": "In kg·cm², e.g. 320.",
+              "stiffness": "RA, e.g. 66.",
+              "length": "Inches, e.g. 27.",
+              "tension_min": "In this racket's tension unit.",
+              "tension_max": "In this racket's tension unit."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "tension_range": "Minimum tension must not be above the maximum."
+    }
+  },
+  "selector": {
+    "tension_unit": {
+      "options": {
+        "lbs": "Pounds (lbs)",
+        "kg": "Kilograms (kg)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "strings": {
+        "name": "Strings"
+      },
+      "tension": {
+        "name": "Tension"
+      },
+      "last_restrung": {
+        "name": "Last restrung"
+      },
+      "days_since_restring": {
+        "name": "Days since restring"
+      },
+      "restrings": {
+        "name": "Restrings"
+      },
+      "total_cost": {
+        "name": "Total string cost"
+      },
+      "strung_weight": {
+        "name": "Strung weight"
+      },
+      "unstrung_weight": {
+        "name": "Unstrung weight"
+      },
+      "balance": {
+        "name": "Balance"
+      },
+      "swingweight": {
+        "name": "Swingweight"
+      },
+      "stiffness": {
+        "name": "Stiffness"
+      },
+      "length": {
+        "name": "Length"
+      },
+      "tension_min": {
+        "name": "Recommended tension (min)"
+      },
+      "tension_max": {
+        "name": "Recommended tension (max)"
+      }
+    },
+    "image": {
+      "photo": {
+        "name": "Photo"
+      }
+    }
+  },
+  "exceptions": {
+    "racket_not_found": {
+      "message": "No racket found with ID {entry_id}."
+    },
+    "racket_not_loaded": {
+      "message": "Racket {racket} is not loaded."
+    },
+    "restring_not_found": {
+      "message": "No restring found with ID {restring_id}."
+    },
+    "no_restrings": {
+      "message": "Racket {racket} has no restrings yet."
+    },
+    "invalid_image": {
+      "message": "Couldn't use that image: {reason}."
+    }
+  },
+  "services": {
+    "add_restring": {
+      "name": "Add restring",
+      "description": "Log a new restring for a racket.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket that was restrung."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Date of the restring. Defaults to today."
+        },
+        "main_string": {
+          "name": "Main string",
+          "description": "String used for the mains (or full bed)."
+        },
+        "main_tension": {
+          "name": "Main tension",
+          "description": "Tension of the mains."
+        },
+        "cross_string": {
+          "name": "Cross string",
+          "description": "String used for the crosses, if hybrid. Defaults to the main string."
+        },
+        "cross_tension": {
+          "name": "Cross tension",
+          "description": "Tension of the crosses. Defaults to the main tension."
+        },
+        "cost": {
+          "name": "Cost",
+          "description": "What the restring cost."
+        },
+        "stringer": {
+          "name": "Stringer",
+          "description": "Who strung it (shop or person)."
+        },
+        "rating": {
+          "name": "Rating",
+          "description": "How much you liked this setup, 1–5."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "What you liked or didn't like."
+        },
+        "image": {
+          "name": "Photo",
+          "description": "A photo of the racket with this string job. Pick or upload one in My media."
+        }
+      }
+    },
+    "update_restring": {
+      "name": "Update restring",
+      "description": "Change a logged restring, e.g. add notes or a rating after playing. Updates the latest restring if no ID is given.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket."
+        },
+        "restring_id": {
+          "name": "Restring ID",
+          "description": "ID of the restring to change. Leave empty for the latest one."
+        },
+        "date": {
+          "name": "Date",
+          "description": "Date of the restring."
+        },
+        "main_string": {
+          "name": "Main string",
+          "description": "String used for the mains."
+        },
+        "main_tension": {
+          "name": "Main tension",
+          "description": "Tension of the mains."
+        },
+        "cross_string": {
+          "name": "Cross string",
+          "description": "String used for the crosses."
+        },
+        "cross_tension": {
+          "name": "Cross tension",
+          "description": "Tension of the crosses."
+        },
+        "cost": {
+          "name": "Cost",
+          "description": "What the restring cost."
+        },
+        "stringer": {
+          "name": "Stringer",
+          "description": "Who strung it."
+        },
+        "rating": {
+          "name": "Rating",
+          "description": "How much you liked this setup, 1–5."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "What you liked or didn't like."
+        },
+        "image": {
+          "name": "Photo",
+          "description": "Add or replace the photo for this restring."
+        },
+        "remove_image": {
+          "name": "Remove photo",
+          "description": "Delete the photo for this restring."
+        }
+      }
+    },
+    "delete_restring": {
+      "name": "Delete restring",
+      "description": "Remove a restring from a racket's history.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket."
+        },
+        "restring_id": {
+          "name": "Restring ID",
+          "description": "ID of the restring to delete."
+        }
+      }
+    },
+    "get_history": {
+      "name": "Get history",
+      "description": "Return the full restring history of a racket.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket."
+        }
+      }
+    }
+  }
+}

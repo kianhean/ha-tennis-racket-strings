@@ -1,0 +1,100 @@
+# Self-assessment against Home Assistant's integration quality scale
+# (https://developers.home-assistant.io/docs/core/integration-quality-scale/).
+# hassfest only validates this file for core integrations; here it is a
+# checklist of what is done and what is left. Keep it honest when editing.
+rules:
+  # Bronze
+  action-setup: done
+  appropriate-polling:
+    status: exempt
+    comment: Nothing is polled; entities update when the history changes (and at midnight for the age).
+  brands: done
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency: done
+  docs-actions: done
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure:
+    status: exempt
+    comment: No device or service to connect to.
+  test-before-setup:
+    status: exempt
+    comment: No device or service to connect to.
+  unique-config-entry:
+    status: exempt
+    comment: One entry per racket; several rackets may share a name.
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable:
+    status: exempt
+    comment: Local data only; entities are never unavailable.
+  integration-owner: done
+  log-when-unavailable:
+    status: exempt
+    comment: Local data only.
+  parallel-updates:
+    status: exempt
+    comment: Entities never poll or call out.
+  reauthentication-flow:
+    status: exempt
+    comment: No authentication.
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: exempt
+    comment: A racket can't be discovered.
+  discovery-update-info:
+    status: exempt
+    comment: A racket can't be discovered.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One device per config entry.
+  entity-category:
+    status: exempt
+    comment: Every entity is primary data; none is config or diagnostic.
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: exempt
+    comment: Every entity is useful by default.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow:
+    status: todo
+    comment: Racket details are edited in the options flow instead.
+  repair-issues:
+    status: exempt
+    comment: Nothing for the user to repair.
+  stale-devices:
+    status: exempt
+    comment: Removing the entry removes its device.
+
+  # Platinum
+  async-dependency: done
+  inject-websession:
+    status: exempt
+    comment: No HTTP requests.
+  strict-typing:
+    status: todo
+    comment: Typed throughout, but not checked with mypy in CI yet.

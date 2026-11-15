@@ -1,0 +1,71 @@
+blueprint:
+  name: Racket – restring reminder
+  description: >-
+    Get a reminder when a racket's strings reach an age you choose. Uses the
+    **Days since restring** sensor from the Racket String Tracker integration.
+    Fires once each time the strings cross that age; logging a restring
+    resets it.
+  domain: automation
+  author: Racket String Tracker
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/restring_reminder.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    age_sensor:
+      name: Days since restring sensor
+      selector:
+        entity:
+          filter:
+            - integration: racket_tracker
+              domain: sensor
+              device_class: duration
+    days:
+      name: Remind after (days)
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 365
+          step: 1
+          unit_of_measurement: d
+    notify_action:
+      name: Notify action
+      description: >-
+        The action that sends the notification, for example
+        notify.mobile_app_your_phone. Leave as notify.notify to use the default.
+      default: notify.notify
+      selector:
+        text: {}
+    extra_actions:
+      name: Extra actions (optional)
+      description: Anything else to do, for example add a to-do item.
+      default: []
+      selector:
+        action: {}
+
+mode: single
+max_exceeded: silent
+
+# Trigger templates only see trigger_variables (not variables).
+trigger_variables:
+  age_sensor: !input age_sensor
+  days: !input days
+
+triggers:
+  # A template (not numeric_state, whose "above" is strict) so that
+  # "after 60 days" includes day 60.
+  - trigger: template
+    value_template: >-
+      {{ states(age_sensor) | is_number and states(age_sensor) | int >= days }}
+
+variables:
+  racket: "{{ device_attr(device_id(age_sensor), 'name') or 'Your racket' }}"
+
+actions:
+  - action: !input notify_action
+    data:
+      title: "🎾 Time to restring?"
+      message: >-
+        {{ racket }}'s strings are {{ states(age_sensor) | int }} days old.
+  - choose: []
+    default: !input extra_actions

@@ -1,0 +1,59 @@
+blueprint:
+  name: Racket – restring logged
+  description: >-
+    Send a notification, with the photo if there is one, every time a
+    restring is logged with the Racket String Tracker integration. Leave the
+    racket empty to be notified for every racket.
+  domain: automation
+  author: Racket String Tracker
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/restring_logged.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    racket:
+      name: Racket (optional)
+      description: Only for this racket. Leave empty for all rackets.
+      default: ""
+      selector:
+        config_entry:
+          integration: racket_tracker
+    notify_action:
+      name: Notify action
+      description: >-
+        The action that sends the notification, for example
+        notify.mobile_app_your_phone. Leave as notify.notify to use the default.
+      default: notify.notify
+      selector:
+        text: {}
+    extra_actions:
+      name: Extra actions (optional)
+      default: []
+      selector:
+        action: {}
+
+mode: queued
+
+triggers:
+  - trigger: event
+    event_type: racket_tracker_restrung
+
+variables:
+  racket_filter: !input racket
+  r: "{{ trigger.event.data }}"
+
+conditions:
+  - condition: template
+    value_template: "{{ not racket_filter or racket_filter == r.config_entry_id }}"
+
+actions:
+  - action: !input notify_action
+    data:
+      title: "Restrung: {{ r.racket }}"
+      message: >-
+        {{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif %}
+        @ {{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %}
+        {{ r.tension_unit }}{% if r.cost is not none %} · {{ r.cost }}{% endif %}
+      data:
+        image: "{{ r.image_url or '' }}"
+  - choose: []
+    default: !input extra_actions

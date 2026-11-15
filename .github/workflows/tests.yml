@@ -1,0 +1,93 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so new Home Assistant releases are checked even without pushes.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    # Every test loads the integration into a real HA instance via
+    # pytest-homeassistant-custom-component, which pins an exact HA release.
+    # Run at the minimum supported version, current stable and the newest
+    # harness (often an HA beta: an early warning that doesn't block merges).
+    name: Home Assistant ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Keep in sync with "homeassistant" in hacs.json and the blueprints'
+          # min_version. 2025.7 is the first with `accept` on the media selector.
+          - name: "2025.7.0 (minimum)"
+            python-version: "3.13"
+            phcc: "pytest-homeassistant-custom-component==0.13.260"
+            # aiodns in HA 2025.7 breaks with pycares 5
+            extra: "pycares<5"
+            experimental: false
+            coverage: false
+          - name: "2026.9.4 (stable)"
+            python-version: "3.14"
+            phcc: "pytest-homeassistant-custom-component==0.13.367"
+            experimental: false
+            coverage: true
+          - name: "latest (incl. beta)"
+            python-version: "3.14"
+            phcc: "pytest-homeassistant-custom-component"
+            experimental: true
+            coverage: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Home Assistant test harness
+        run: pip install "${{ matrix.phcc }}" "pytest-cov>=4.1" ${{ matrix.extra && format('"{0}"', matrix.extra) || '' }}
+
+      - name: Show Home Assistant version
+        run: python -c "from homeassistant.const import __version__; print(__version__)"
+
+      - name: Run tests
+        run: pytest tests -v --cov=custom_components/racket_tracker --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: matrix.coverage
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Ruff
+        run: pip install ruff==0.14.11
+
+      - name: Ruff lint
+        run: ruff check custom_components/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check custom_components/ tests/

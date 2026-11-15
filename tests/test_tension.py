@@ -1,43 +1,90 @@
-"""Estimated tension from hours of play per week."""
+"""Estimated tension: the log-time / log-play model, string types, calibration."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.racket_tracker.const import DOMAIN
 from custom_components.racket_tracker.tension import (
+    STRING_TYPES,
+    LossRates,
     PlaySettings,
+    calibrate,
     estimate,
+    loss_percent,
     play_settings,
 )
 
+POLY = STRING_TYPES["polyester"]
+RECORD = {"date": "2026-01-01", "main_tension": 52, "cross_tension": 50}
 
-def test_estimate_model() -> None:
-    settings = PlaySettings(hours_per_week=4, initial_loss=10, loss_per_hour=1)
-    record = {"date": "2026-01-01", "main_tension": 52, "cross_tension": 50}
+
+def _on(days: int) -> date:
+    return date(2026, 1, 1) + timedelta(days=days)
+
+
+def test_loss_model() -> None:
     # Strung today: only the initial loss
-    est = estimate(record, settings, date(2026, 1, 1))
+    assert loss_percent(POLY, 0, 0) == 10
+    # Relaxation: +4 % each time the age multiplies by 10, played or not
+    assert loss_percent(POLY, 10, 0) == pytest.approx(14)
+    assert loss_percent(POLY, 100, 0) == pytest.approx(18)
+    # Play: 3 % in the first hour, 3 % more per doubling of (1 + hours)
+    assert loss_percent(POLY, 1, 1) == pytest.approx(13)
+    assert loss_percent(POLY, 1, 3) == pytest.approx(16)
+
+
+def test_estimate() -> None:
+    settings = PlaySettings(4, "polyester", POLY)
+    est = estimate(RECORD, settings, _on(0))
     assert (est.hours_played, est.loss_percent, est.main_tension) == (0, 10, 46.8)
-    # Two weeks later: 8 hours played, 18 % lost
-    est = estimate(record, settings, date(2026, 1, 15))
-    assert est.hours_played == 8
-    assert est.loss_percent == 18
-    assert est.main_tension == 42.6
-    assert est.cross_tension == 41
+    # Two weeks, 8 h: 10 + 4·log10(14) + 3·log2(9) = 24.1 %
+    est = estimate(RECORD, settings, _on(14))
+    assert (est.hours_played, est.loss_percent) == (8, 24.1)
+    assert (est.main_tension, est.cross_tension) == (39.5, 38)
     # Capped at 50 %
-    assert estimate(record, settings, date(2027, 1, 1)).loss_percent == 50
-    assert estimate(None, settings, date(2026, 1, 1)) is None
+    assert estimate(RECORD, settings, _on(3 * 365)).loss_percent == 50
+    assert estimate(None, settings, _on(0)) is None
 
+
+def test_play_settings() -> None:
     assert play_settings({}) is None
-    assert play_settings({"play": {"hours_per_week": 3}}) == PlaySettings(3, 10, 1)
+    assert play_settings({"play": {"hours_per_week": 3}}) == PlaySettings(
+        3, "polyester", POLY
+    )
+    # String type sets the defaults; set rates override them
+    gut = play_settings({"play": {"hours_per_week": 3, "string_type": "gut"}})
+    assert gut.rates == STRING_TYPES["gut"]
+    custom = play_settings(
+        {"play": {"hours_per_week": 3, "string_type": "nylon", "first_hour_loss": 2}}
+    )
+    assert custom.rates == LossRates(initial=6, first_hour=2, relaxation=2)
+    # Materials keep the order the sources report: polyester > nylon > gut
+    losses = [loss_percent(r, 30, 17) for r in STRING_TYPES.values()]
+    assert losses == sorted(losses, reverse=True)
 
 
-async def test_estimate_sensors(hass: HomeAssistant) -> None:
+def test_calibrate() -> None:
+    settings = PlaySettings(4, "polyester", POLY)
+    fitted = calibrate(RECORD, settings, 40, _on(14))
+    assert estimate(RECORD, fitted, _on(14)).main_tension == 40
+    assert fitted.rates.initial < POLY.initial  # Lost less than predicted
+    for bad in (52, 60, 20):  # no loss, a gain, more than the cap
+        with pytest.raises(ValueError):
+            calibrate(RECORD, settings, bad, _on(14))
+
+
+async def test_estimate_sensors_and_calibration(hass: HomeAssistant) -> None:
+    assert await async_setup_component(hass, "http", {})
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -46,15 +93,22 @@ async def test_estimate_sensors(hass: HomeAssistant) -> None:
         {
             "name": "Blade",
             "tension_unit": "kg",
-            "play": {"hours_per_week": 7, "tension_loss_per_hour": 0.5},
+            "play": {"hours_per_week": 7, "string_type": "nylon"},
         },
     )
     assert result["type"] == "create_entry"
     await hass.async_block_till_done()
     entry = result["result"]
-    assert entry.options["play"] == {"hours_per_week": 7, "tension_loss_per_hour": 0.5}
+    assert entry.options["play"] == {"hours_per_week": 7, "string_type": "nylon"}
 
-    # No restring yet: no estimate
+    # Calibrating needs a restring; no restring yet: no estimate
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "calibrate_tension",
+            {"config_entry_id": entry.entry_id, "tension": 20},
+            blocking=True,
+        )
     assert hass.states.get("sensor.blade_estimated_tension").state == "unknown"
 
     ten_days_ago = (dt_util.now().date() - timedelta(days=10)).isoformat()
@@ -64,7 +118,7 @@ async def test_estimate_sensors(hass: HomeAssistant) -> None:
         {
             "config_entry_id": entry.entry_id,
             "date": ten_days_ago,
-            "main_string": "RPM Blast",
+            "main_string": "Synthetic gut",
             "cross_string": "VS Gut",
             "main_tension": 25,
             "cross_tension": 24,
@@ -72,16 +126,39 @@ async def test_estimate_sensors(hass: HomeAssistant) -> None:
         blocking=True,
     )
     await hass.async_block_till_done()
-    # 10 h played: 10 % + 0.5 % × 10 = 15 %
+    # Nylon, 10 days, 10 h: 6 + 2·log10(10) + 1.5·log2(11) = 13.2 %
     tension = hass.states.get("sensor.blade_estimated_tension")
-    assert float(tension.state) == 21.2
+    assert float(tension.state) == 21.7
     assert tension.attributes["unit_of_measurement"] == "kg"
     assert tension.attributes["strung_tension"] == 25
-    assert tension.attributes["estimated_cross_tension"] == 20.4
-    assert float(hass.states.get("sensor.blade_estimated_tension_loss").state) == 15
+    assert tension.attributes["estimated_cross_tension"] == 20.8
+    assert tension.attributes["string_type"] == "nylon"
+    assert tension.attributes["first_hour_loss"] == 1.5
+    assert float(hass.states.get("sensor.blade_estimated_tension_loss").state) == 13.2
     assert float(hass.states.get("sensor.blade_hours_played").state) == 10
 
-    # Clearing hours per week removes the estimates
+    # A measurement scales the rates to match it
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "calibrate_tension",
+            {"config_entry_id": entry.entry_id, "tension": 26},
+            blocking=True,
+        )
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "calibrate_tension",
+        {"config_entry_id": entry.entry_id, "tension": 20.5},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+    assert resp["first_hour_loss"] > 1.5
+    assert entry.options["play"]["string_type"] == "nylon"
+    assert entry.options["play"]["first_hour_loss"] == resp["first_hour_loss"]
+    assert float(hass.states.get("sensor.blade_estimated_tension").state) == 20.5
+
+    # Clearing hours per week removes the estimates; calibrating then fails
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"tension_unit": "kg", "play": {}}
@@ -90,3 +167,39 @@ async def test_estimate_sensors(hass: HomeAssistant) -> None:
     assert "play" not in entry.options
     assert hass.states.get("sensor.blade_estimated_tension") is None
     assert er.async_get(hass).async_get("sensor.blade_hours_played") is None
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "calibrate_tension",
+            {"config_entry_id": entry.entry_id, "tension": 20},
+            blocking=True,
+        )
+
+
+async def test_migrate_linear_model(hass: HomeAssistant) -> None:
+    """0.3 stored a loss per hour; it becomes the first-hour loss (1 %/h → 3 %)."""
+    assert await async_setup_component(hass, "http", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Old",
+        version=1,
+        minor_version=1,
+        options={
+            "tension_unit": "lbs",
+            "play": {
+                "hours_per_week": 4,
+                "initial_tension_loss": 8,
+                "tension_loss_per_hour": 0.5,
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.minor_version == 2
+    assert entry.options["play"] == {
+        "hours_per_week": 4,
+        "initial_tension_loss": 8,
+        "first_hour_loss": 1.5,
+    }
+    assert hass.states.get("sensor.old_estimated_tension") is not None

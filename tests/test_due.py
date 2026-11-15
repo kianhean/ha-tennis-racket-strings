@@ -37,15 +37,20 @@ def _days_ago(days: int) -> str:
             {"due": {"hours_played": 10}, "play": {"hours_per_week": 4}},
             (18, "hours_played"),
         ),
-        # 50 lbs → 45: 10 % loss = the initial loss, due on the day
+        # 50 lbs → 45: 10 % loss = the polyester initial loss, due on the day
         (
             {"due": {"min_tension": 45}, "play": {"hours_per_week": 4}},
             (0, "min_tension"),
         ),
-        # 50 → 40 lbs: 20 % = 10 % initial + 10 h at 1 %/h = 17.5 days
+        # 50 → 40 lbs: 20 % = 10 % + 4 % × log10(7) + 3 % × log2(1 + 4 h) on day 7
         (
             {"due": {"min_tension": 40}, "play": {"hours_per_week": 4}},
-            (18, "min_tension"),
+            (7, "min_tension"),
+        ),
+        # An unplayed racket still relaxes: 50 → 44 lbs (12 %) on day 3
+        (
+            {"due": {"min_tension": 44}, "play": {"hours_per_week": 0}},
+            (3, "min_tension"),
         ),
         # Never that low (the estimate is capped at 50 % loss)
         ({"due": {"min_tension": 20}, "play": {"hours_per_week": 4}}, None),

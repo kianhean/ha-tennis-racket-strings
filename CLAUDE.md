@@ -12,7 +12,7 @@ custom_components/racket_tracker/
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
-├── tension.py         # Estimated tension: options["play"] (hours/week, initial loss, loss/hour) → estimate()
+├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
 ├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible play/due/setup/specs); options flow edits them; reconfigure renames
@@ -23,7 +23,7 @@ custom_components/racket_tracker/
 ├── button.py          # Restring with usual setup → usual_setup() + async_log_restring()
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
-├── services.yaml      # add_restring, repeat_restring, update_restring, delete_restring, get_history
+├── services.yaml      # add_restring, repeat_restring, calibrate_tension, update_restring, delete_restring, get_history
 ├── icons.json         # Entity + action icons (no _attr_icon in code)
 ├── strings.json       # Source strings; translations/en.json must be identical
 ├── quality_scale.yaml # Self-assessment; keep it honest
@@ -51,8 +51,13 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   `dataset_racket` (`slug`, `name`, `version`). The options flow keeps both unless "Use looked-up
   specs" is turned off. Dataset details only fill brand/model/head size/pattern the user left
   blank. Changing options reloads the entry.
-- `play` (optional section): `hours_per_week`, `initial_tension_loss` (default 10 %),
-  `tension_loss_per_hour` (default 1 %). Without hours/week the estimate sensors are removed.
+- `play` (optional section): `hours_per_week`, `string_type` (polyester/nylon/gut presets) and
+  optional overrides `initial_tension_loss`, `first_hour_loss`, `relaxation_loss`.
+  loss = initial + relaxation·log10(days) + first_hour·log2(1 + hours), capped at 50 %. The
+  model and its presets are cited in `tension.py` and README "Where the numbers come from"; keep
+  both in sync. `calibrate_tension` scales all three rates to a measured tension. Entry minor
+  version 2 migrated the old linear `tension_loss_per_hour` (×3 → `first_hour_loss`). Without
+  hours/week the estimate sensors are removed.
 - `due` (optional section): `days`, `hours_played`, `min_tension` (racket unit); earliest wins.
   `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
   due binary sensor and next_restring sensor are removed.

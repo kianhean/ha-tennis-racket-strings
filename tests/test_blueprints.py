@@ -135,13 +135,13 @@ async def test_restring_due(hass: HomeAssistant, notify_calls) -> None:
     )
     assert notify_calls == []
 
-    # 52 → 40 lbs is 23.1 % loss: 10 % at once, then 13.1 h at 1 %/h → day 14
+    # 52 → 40 lbs is 23.1 % loss: 10 % + 4 % × log10(8) + 3 % × log2(1 + 8 h) on day 8
     await hass.services.async_call(
         DOMAIN,
         "update_restring",
         {
             "config_entry_id": entry_id,
-            "date": (dt_util.now().date() - timedelta(days=14)).isoformat(),
+            "date": (dt_util.now().date() - timedelta(days=8)).isoformat(),
         },
         blocking=True,
     )

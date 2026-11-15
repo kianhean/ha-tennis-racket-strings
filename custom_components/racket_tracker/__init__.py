@@ -40,6 +40,7 @@ from .const import (
     EDITABLE_FIELDS,
     EVENT_RESTRUNG,
     SERVICE_ADD_RESTRING,
+    SERVICE_CALIBRATE_TENSION,
     SERVICE_DELETE_RESTRING,
     SERVICE_GET_HISTORY,
     SERVICE_REPEAT_RESTRING,
@@ -55,6 +56,15 @@ from .images import (
     image_dir,
 )
 from .specs import effective_specs
+from .tension import (
+    CONF_FIRST_HOUR_LOSS,
+    CONF_INITIAL_LOSS,
+    CONF_PLAY,
+    CONF_RELAXATION_LOSS,
+    calibrate,
+    migrate_play_options,
+    play_settings,
+)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -125,6 +135,14 @@ REPEAT_SCHEMA = vol.Schema(
         vol.Optional(ATTR_STRINGER): cv.string,
         vol.Optional(ATTR_NOTES): cv.string,
         vol.Optional(ATTR_IMAGE): vol.Any(dict, cv.string),
+    }
+)
+
+CALIBRATE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required("tension"): _TENSION,
+        vol.Optional(ATTR_DATE): cv.date,
     }
 )
 
@@ -231,6 +249,45 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         record = await async_log_restring(hass, entry, {**fields, **data})
         return {"racket": entry.title, "restring": record}
 
+    async def calibrate_tension(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        if (settings := play_settings(entry.options)) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_play_settings",
+                translation_placeholders={"racket": entry.title},
+            )
+        if (latest := entry.runtime_data.latest) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_restrings",
+                translation_placeholders={"racket": entry.title},
+            )
+        measured = call.data["tension"]
+        on = call.data.get(ATTR_DATE) or dt_util.now().date()
+        try:
+            fitted = calibrate(latest, settings, measured, on)
+        except ValueError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_calibrate",
+                translation_placeholders={
+                    "tension": str(measured),
+                    "strung": str(latest.get(ATTR_MAIN_TENSION)),
+                },
+            ) from err
+        rates = {
+            CONF_INITIAL_LOSS: fitted.rates.initial,
+            CONF_FIRST_HOUR_LOSS: fitted.rates.first_hour,
+            CONF_RELAXATION_LOSS: fitted.rates.relaxation,
+        }
+        play = {**entry.options[CONF_PLAY], **rates}
+        # Saving the options reloads the racket with the new rates
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_PLAY: play}
+        )
+        return {"racket": entry.title, "measured_tension": measured, **rates}
+
     async def update_restring(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
         history = entry.runtime_data
@@ -306,6 +363,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     hass.services.async_register(
         DOMAIN,
+        SERVICE_CALIBRATE_TENSION,
+        calibrate_tension,
+        CALIBRATE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_UPDATE_RESTRING,
         update_restring,
         UPDATE_SCHEMA,
@@ -321,6 +385,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         HISTORY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bool:
+    """Migrate options from older versions."""
+    if entry.version > 1:
+        return False  # Downgraded from a newer version
+    if entry.minor_version < 2:
+        # 1.2: the linear tension model's loss per hour became first_hour_loss
+        options = dict(entry.options)
+        if play := options.get(CONF_PLAY):
+            options[CONF_PLAY] = migrate_play_options(play)
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
     return True
 
 

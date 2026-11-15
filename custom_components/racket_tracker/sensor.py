@@ -355,8 +355,10 @@ class PlaySensor(SensorEntity):
         assert self._settings is not None
         attrs: dict[str, Any] = {
             "hours_per_week": self._settings.hours_per_week,
-            "initial_tension_loss": self._settings.initial_loss,
-            "tension_loss_per_hour": self._settings.loss_per_hour,
+            "string_type": self._settings.string_type,
+            "initial_tension_loss": self._settings.rates.initial,
+            "first_hour_loss": self._settings.rates.first_hour,
+            "relaxation_loss": self._settings.rates.relaxation,
         }
         if self.entity_description.key == "estimated_tension":
             est = self._estimate()

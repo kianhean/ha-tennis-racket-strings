@@ -61,10 +61,13 @@ from .due import (
 )
 from .specs import CONF_DATASET_SPECS, CONF_SPECS, SPECS
 from .tension import (
+    CONF_FIRST_HOUR_LOSS,
     CONF_HOURS_PER_WEEK,
     CONF_INITIAL_LOSS,
-    CONF_LOSS_PER_HOUR,
     CONF_PLAY,
+    CONF_RELAXATION_LOSS,
+    CONF_STRING_TYPE,
+    STRING_TYPES,
 )
 
 CONF_LOOKUP = "lookup"
@@ -131,8 +134,17 @@ def _number(
 PLAY_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_HOURS_PER_WEEK): _number(0, 60, 0.5, "h"),
-        vol.Optional(CONF_INITIAL_LOSS): _number(0, 30, 0.5, "%"),
-        vol.Optional(CONF_LOSS_PER_HOUR): _number(0, 10, 0.1, "%"),
+        vol.Optional(CONF_STRING_TYPE): SelectSelector(
+            SelectSelectorConfig(
+                options=list(STRING_TYPES),
+                mode=SelectSelectorMode.DROPDOWN,
+                translation_key=CONF_STRING_TYPE,
+            )
+        ),
+        # Leave empty to use the string type's defaults
+        vol.Optional(CONF_INITIAL_LOSS): _number(0, 40, 0.1, "%"),
+        vol.Optional(CONF_FIRST_HOUR_LOSS): _number(0, 20, 0.1, "%"),
+        vol.Optional(CONF_RELAXATION_LOSS): _number(0, 20, 0.1, "%"),
     }
 )
 
@@ -268,6 +280,7 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
     """Add a racket."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     _name: str
 

@@ -5,7 +5,8 @@ A racket can have up to three rules (options["due"]); the earliest one wins:
 - ``days``: restring after this many days.
 - ``hours_played``: restring after this many hours of play (needs hours per week).
 - ``min_tension``: restring when the estimated tension of the mains drops to this
-  (needs hours per week; uses the same model as the estimated tension sensor).
+  (needs hours per week; uses the same model as the estimated tension sensor,
+  so it also counts the loss while the racket isn't played).
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from .const import ATTR_DATE, ATTR_MAIN_TENSION
-from .tension import MAX_LOSS, PlaySettings, play_settings
+from .const import ATTR_DATE
+from .tension import PlaySettings, estimate, play_settings
 
 CONF_DUE = "due"
 CONF_DUE_DAYS = "days"
@@ -26,6 +27,7 @@ CONF_DUE_TENSION = "min_tension"
 
 # Rules that need hours of play per week
 PLAY_RULES = (CONF_DUE_HOURS, CONF_DUE_TENSION)
+MAX_DAYS = 3650
 
 
 @dataclass(frozen=True)
@@ -48,18 +50,29 @@ def _days_for_hours(hours: float, settings: PlaySettings) -> int | None:
 
 
 def _days_for_tension(
-    strung: Any, minimum: float, settings: PlaySettings
+    record: dict[str, Any], minimum: float, settings: PlaySettings
 ) -> int | None:
-    if not isinstance(strung, (int, float)) or isinstance(strung, bool) or strung <= 0:
-        return None
-    needed_loss = (1 - minimum / strung) * 100
-    if needed_loss <= settings.initial_loss:
-        return 0
-    if needed_loss > MAX_LOSS or settings.loss_per_hour <= 0:
-        return None  # The estimate never gets that low
-    return _days_for_hours(
-        (needed_loss - settings.initial_loss) / settings.loss_per_hour, settings
-    )
+    """First day the estimated mains tension is at or below the minimum."""
+
+    def low_enough(days: int) -> bool:
+        est = estimate(record, settings, start + timedelta(days=days))
+        return (
+            est is not None
+            and est.main_tension is not None
+            and (est.main_tension <= minimum)
+        )
+
+    start = date.fromisoformat(record[ATTR_DATE])
+    if not low_enough(MAX_DAYS):
+        return None  # Never that low within ten years (or no strung tension)
+    low, high = 0, MAX_DAYS  # The loss only grows, so bisect
+    while low < high:
+        mid = (low + high) // 2
+        if low_enough(mid):
+            high = mid
+        else:
+            low = mid + 1
+    return low
 
 
 def next_due(record: dict[str, Any] | None, options: Mapping[str, Any]) -> Due | None:
@@ -77,9 +90,7 @@ def next_due(record: dict[str, Any] | None, options: Mapping[str, Any]) -> Due |
         ) is not None:
             candidates.append((d, CONF_DUE_HOURS))
         if (minimum := rules.get(CONF_DUE_TENSION)) is not None and (
-            d := _days_for_tension(
-                record.get(ATTR_MAIN_TENSION), float(minimum), settings
-            )
+            d := _days_for_tension(record, float(minimum), settings)
         ) is not None:
             candidates.append((d, CONF_DUE_TENSION))
     if not candidates:

@@ -63,6 +63,7 @@ SERVICE_UPDATE_RESTRING = "update_restring"
 SERVICE_DELETE_RESTRING = "delete_restring"
 SERVICE_GET_HISTORY = "get_history"
 SERVICE_REPEAT_RESTRING = "repeat_restring"
+SERVICE_CALIBRATE_TENSION = "calibrate_tension"
 
 # Events
 EVENT_RESTRUNG = f"{DOMAIN}_restrung"

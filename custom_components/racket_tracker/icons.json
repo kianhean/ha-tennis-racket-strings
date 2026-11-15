@@ -29,6 +29,15 @@
       "total_cost": {
         "default": "mdi:cash-multiple"
       },
+      "estimated_tension": {
+        "default": "mdi:arrow-collapse-horizontal"
+      },
+      "estimated_tension_loss": {
+        "default": "mdi:trending-down"
+      },
+      "hours_played": {
+        "default": "mdi:clock-outline"
+      },
       "strung_weight": {
         "default": "mdi:weight-gram"
       },

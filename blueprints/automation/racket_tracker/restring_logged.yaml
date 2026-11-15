@@ -2,10 +2,10 @@ blueprint:
   name: Racket – restring logged
   description: >-
     Send a notification, with the photo if there is one, every time a
-    restring is logged with the Racket String Tracker integration. Leave the
+    restring is logged with the Strung integration. Leave the
     racket empty to be notified for every racket.
   domain: automation
-  author: Racket String Tracker
+  author: Strung
   source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/restring_logged.yaml
   homeassistant:
     min_version: 2025.7.0

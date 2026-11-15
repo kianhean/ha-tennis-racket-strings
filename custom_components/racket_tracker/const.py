@@ -1,4 +1,4 @@
-"""Constants for the Racket String Tracker integration."""
+"""Constants for the Strung integration."""
 
 from __future__ import annotations
 

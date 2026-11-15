@@ -3,10 +3,10 @@ blueprint:
   description: >-
     A few days after a restring, remind you to add a rating and notes if you
     haven't yet, so you remember what you liked. Uses the **Strings** sensor
-    from the Racket String Tracker integration; rate with the
+    from the Strung integration; rate with the
     "Update restring" action (leave the restring ID empty for the latest).
   domain: automation
-  author: Racket String Tracker
+  author: Strung
   source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/rate_strings.yaml
   homeassistant:
     min_version: 2025.7.0

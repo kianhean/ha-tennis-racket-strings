@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="custom_components/racket_tracker/brand/dark_logo@2x.png">
-    <img src="custom_components/racket_tracker/brand/logo@2x.png" alt="Racket Strings for Home Assistant" height="96">
+    <img src="custom_components/racket_tracker/brand/logo@2x.png" alt="Strung: tennis restring tracker for Home Assistant" height="96">
   </picture>
 </h1>
 
@@ -25,19 +25,26 @@
   <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=racket_tracker"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Open your Home Assistant instance and start adding a racket"></a>
 </p>
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/dashboard-dark.png">
+  <img src="images/screenshots/dashboard-light.png" alt="The example Rackets dashboard: photo, current hybrid strings, tension and estimated tension, specs from the dataset and your measurements, and a restring history table with photos" width="800">
+</picture>
+</p>
+
 ## What's inside
 
 | | | |
 |---|---|---|
-| 🎾 **One device per racket**<br>Brand, model, head size and string pattern; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer for every job | 📝 **Notes and ratings**<br>Rate each setup 1–5 and note what you liked, now or after a few sessions |
-| 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range, from your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
-| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring reminders, a notification with the photo, and a nudge to rate your strings | 🏠 **Local only**<br>No cloud and no account. History lives in `.storage`, photos in your config folder |
+| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>Set hours of play per week and see roughly what tension the strings are at now |
+| 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
+| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring reminders, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The only network request is the optional racket lookup |
 
 ## Installation
 
 1. Use the **Open in HACS** button above, or in HACS go to **⋮ → Custom repositories**, add
    `https://github.com/kianhean/ha-tennis-racket-strings` and pick the **Integration** category.
-2. Search for **Racket String Tracker** and install it.
+2. Search for **Strung** and install it.
 3. Restart Home Assistant.
 
 Requires **Home Assistant 2025.7** or newer.
@@ -52,23 +59,29 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 ## Setup
 
 1. Go to **Settings → Devices & services → Add integration** (or use the **Add integration** button above).
-2. Search for **Racket String Tracker**.
+2. Search for **Strung**.
 3. Fill in the racket:
 
 | Field | Example | |
 |---|---|---|
 | Name | `Pure Aero` | Used for entity IDs, e.g. `sensor.pure_aero_tension` |
+| Look up *(optional)* | `pure aero 2023` | Finds the racket in the [racket dataset](#looked-up-specs) and fills in its specs |
 | Brand / Model | `Babolat` / `Pure Aero 98` | Shown on the device |
 | Head size | `98` sq in | |
 | String pattern | `16x20` | |
-| Tension unit | lbs or kg | Used for all tensions on this racket |
+| Tension unit | lbs or kg | Used for every tension on this racket: restrings, recommended range and estimates |
+| **Play and tension loss** *(optional, collapsed)* | `4` h/week | Turns on the [tension estimate](#estimated-tension) |
 | **Specs** *(optional, collapsed)* | see [Racket specs](#racket-specs) | Your own measurements |
 
-Repeat for each racket. To change the details or specs later, click **Configure** on the racket.
+If you filled in **Look up**, the next step lists the matching rackets. Pick yours, or leave it empty
+to skip. Brand, model, head size and string pattern you left blank come from the dataset.
+
+Repeat for each racket. To change the details or specs later, or to look the racket up later, click
+**Configure** on the racket.
 
 ### Removing a racket
 
-**Settings → Devices & services → Racket String Tracker → ⋮ → Delete** on the racket. This deletes
+**Settings → Devices & services → Strung → ⋮ → Delete** on the racket. This deletes
 its restring history and photos too. To remove the integration entirely, delete every racket,
 then remove it in HACS and restart.
 
@@ -85,7 +98,7 @@ The [example dashboard](#dashboard) has a button for each.
 
 ### With the action
 
-**Developer tools → Actions → Racket String Tracker: Add restring**, or in YAML:
+**Developer tools → Actions → Strung: Add restring**, or in YAML:
 
 ```yaml
 action: racket_tracker.add_restring
@@ -139,9 +152,57 @@ under **Configure**. Every field is optional, and each one you fill in becomes a
 | Length | in | `sensor.<racket>_length` |
 | Recommended tension (min/max) | the racket's tension unit | `sensor.<racket>_recommended_tension_min` / `_max` |
 
-Each spec sensor has a `source` attribute: `measured` for your own values, or `dataset` for values
-looked up from a racket database ([planned](#roadmap)). **Your measurements always win**: clear a
-field and the sensor falls back to the dataset value, or disappears if there isn't one.
+Each spec sensor has a `source` attribute: `measured` for your own values, or `dataset` for
+[looked-up values](#looked-up-specs). **Your measurements always win**: clear a field and the sensor
+falls back to the dataset value, or disappears if there isn't one.
+
+### Looked-up specs
+
+Type the racket's brand and model under **Look up** when you add it (or later under **Configure**)
+and pick it from the matches. Strung then reads its **unstrung weight, balance, swingweight and
+stiffness** from the [Racqix Tennis Racquet Dataset](https://www.racqix.com/en/tennis-racquet-dataset)
+(about 1,250 rackets from 18 brands, 1998 to 2026).
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/lookup-dark.png">
+  <img src="images/screenshots/lookup-light.png" alt="Pick your racket: the Pure Aero 2023 variants found by a lookup" width="560">
+</picture>
+</p>
+ Not every racket has every value; swingweight is
+listed for roughly 40% of them.
+
+- The list is downloaded from racqix.com only when you search, and kept in memory for a day. Nothing
+  about you or your rackets is sent.
+- Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
+- To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
+
+## Estimated tension
+
+Strings lose tension: a lot on the first day, whether you play or not, then a bit every hour you
+play. Tell Strung how much you play a racket (**Play and tension loss**, when adding it or under
+**Configure**) and it estimates where the current strings are:
+
+| Field | Default | |
+|---|---|---|
+| Hours of play per week | — | Required for the estimate |
+| Initial tension loss | 10 % | Lost in the first day after stringing |
+| Tension loss per hour of play | 1 % | Lost for every hour you play |
+
+```text
+hours played = hours per week × days since the restring ÷ 7
+loss         = initial loss + loss per hour × hours played   (at most 50 %)
+tension now  = strung tension × (1 − loss)
+```
+
+Example: strung at 52 lbs two weeks ago, 4 hours a week → 8 hours played, 10 % + 8 % = 18 % lost,
+about **42.6 lbs** now. The defaults suit polyester; multifilament and natural gut keep tension
+better, so lower both losses for those. For a hybrid, the same loss is applied to mains and crosses.
+
+This adds three sensors, updated at midnight and after every restring: **Estimated tension** (in the
+racket's unit; `strung_tension`, `estimated_cross_tension`), **Estimated tension loss** (%) and
+**Hours played**. Clear the hours to remove them. To get a reminder, trigger an automation on
+**Estimated tension loss** going above, say, 25 %.
 
 ## Recipes
 
@@ -192,15 +253,27 @@ actions:
 
 ## Dashboard
 
+There's no automatic dashboard: you add the example view yourself. It takes a minute:
+
+1. Add the two scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
+   then reload them (**Developer tools → YAML → Scripts**).
+2. **Settings → Dashboards → Add dashboard → New dashboard from scratch**, name it *Rackets*, and open it.
+3. **✏️ → ⋮ → Raw configuration editor**, replace everything with `views:` and paste the contents of
+   [`examples/dashboard.yaml`](examples/dashboard.yaml) indented under `  - `.
+4. Replace `pure_aero` with your racket's entity prefix. Remove spec rows or the estimate tiles you
+   don't use.
+
 [`examples/dashboard.yaml`](examples/dashboard.yaml) is a complete sections view built only from
 Home Assistant's built-in cards:
 
 - the racket photo, current strings, tension, string age, last restrung and total spent
+- the estimated tension now and how much has been lost (remove those two tiles if you don't set hours per week)
 - **Log restring** and **Rate strings** buttons (they open the script forms)
-- the current setup's rating and notes, your specs, and tension over time
+- the current setup's rating and notes, your specs, and tension (strung and estimated) over time
 - a history table with photo thumbnails, strings, tensions, cost, stars and notes
 
-Replace `pure_aero` with your racket's entity prefix. A test checks that every entity it uses exists.
+A test checks that every entity it uses exists. The screenshot at the top is this view in Home
+Assistant 2026.9 with example data (the photos are placeholders).
 
 A minimal history card:
 
@@ -228,6 +301,9 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `sensor.<racket>_days_since_restring` | `12` d | Updated at midnight |
 | `sensor.<racket>_restrings` | `7` | `history`: every restring, newest first (not stored in the recorder) |
 | `sensor.<racket>_total_string_cost` | `6650` (your currency) | `average_cost` |
+| `sensor.<racket>_estimated_tension` | `42.6` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, play settings. Only with [hours per week](#estimated-tension) |
+| `sensor.<racket>_estimated_tension_loss` | `18` % | play settings |
+| `sensor.<racket>_hours_played` | `8` h | Since the latest restring |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |
 | `sensor.<racket>_<spec>` | see [Racket specs](#racket-specs) | `source`: `measured` / `dataset` |
 
@@ -254,13 +330,6 @@ and every restring field, including `image_url`.
 - **The specs section or photo field is missing**: update to Home Assistant 2025.7 or newer.
 - **Something looks wrong**: on the racket, **⋮ → Download diagnostics** gives its options,
   specs and full history. Attach it to an [issue](https://github.com/kianhean/ha-tennis-racket-strings/issues).
-
-## Roadmap
-
-- **Racket database lookup**: fill in specs automatically from a public racket dataset, such as
-  [Racqix's tennis racquet dataset](https://www.racqix.com/en/tennis-racquet-dataset), when you pick a known model.
-  Values you measured yourself will keep overriding it (the `source` attribute and the
-  `dataset_specs` layer are already in place).
 
 ## Development
 

@@ -1,4 +1,4 @@
-"""Sensors for Racket String Tracker."""
+"""Sensors for Strung."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfTime
+from homeassistant.const import PERCENTAGE, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -35,9 +35,11 @@ from .const import (
     DOMAIN,
     TENSION_UNIT_LBS,
 )
+from .dataset import ATTRIBUTION
 from .entity import racket_device_info
 from .history import RacketHistory, with_image_url
-from .specs import SPECS, Spec, effective_specs, spec_unit
+from .specs import SOURCE_DATASET, SPECS, Spec, effective_specs, spec_unit
+from .tension import Estimate, estimate, play_settings
 
 
 def _latest(history: RacketHistory, key: str) -> Any:
@@ -143,6 +145,44 @@ SENSORS: tuple[RacketSensorDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class PlaySensorDescription(SensorEntityDescription):
+    """A sensor estimated from play time; exists only with hours per week set."""
+
+    value_fn: Callable[[Estimate], Any]
+    racket_unit: bool = False
+
+
+PLAY_SENSORS: tuple[PlaySensorDescription, ...] = (
+    PlaySensorDescription(
+        key="estimated_tension",
+        translation_key="estimated_tension",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda e: e.main_tension,
+        racket_unit=True,
+    ),
+    PlaySensorDescription(
+        key="estimated_tension_loss",
+        translation_key="estimated_tension_loss",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda e: e.loss_percent,
+    ),
+    PlaySensorDescription(
+        key="hours_played",
+        translation_key="hours_played",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda e: e.hours_played,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: RacketConfigEntry,
@@ -151,9 +191,19 @@ async def async_setup_entry(
     """Set up racket sensors."""
     async_add_entities(RacketSensor(hass, entry, desc) for desc in SENSORS)
 
+    registry = er.async_get(hass)
+
+    # Estimates need hours of play per week; drop them when that's cleared.
+    if play_settings(entry.options) is None:
+        for desc in PLAY_SENSORS:
+            unique_id = f"{entry.entry_id}_{desc.key}"
+            if entity_id := registry.async_get_entity_id("sensor", DOMAIN, unique_id):
+                registry.async_remove(entity_id)
+    else:
+        async_add_entities(PlaySensor(entry, desc) for desc in PLAY_SENSORS)
+
     # One sensor per spec that has a value; drop sensors for specs since cleared.
     specs = effective_specs(entry)
-    registry = er.async_get(hass)
     for spec in SPECS:
         if spec.key in specs:
             continue
@@ -242,3 +292,70 @@ class RacketSpecSensor(SensorEntity):
             )
         self._attr_native_value = value["value"]
         self._attr_extra_state_attributes = {"source": value["source"]}
+        if value["source"] == SOURCE_DATASET:
+            self._attr_attribution = ATTRIBUTION
+
+
+class PlaySensor(SensorEntity):
+    """Estimated tension, tension loss or hours played since the last restring."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    entity_description: PlaySensorDescription
+
+    def __init__(
+        self, entry: RacketConfigEntry, description: PlaySensorDescription
+    ) -> None:
+        """Initialize the sensor."""
+        self.entity_description = description
+        self._history = entry.runtime_data
+        self._settings = play_settings(entry.options)
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_device_info = racket_device_info(entry)
+        if description.racket_unit:
+            self._attr_native_unit_of_measurement = entry.options.get(
+                CONF_TENSION_UNIT, TENSION_UNIT_LBS
+            )
+
+    async def async_added_to_hass(self) -> None:
+        """Update on history changes and every day."""
+        self.async_on_remove(
+            self._history.async_add_listener(self.async_write_ha_state)
+        )
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass, self._handle_midnight, hour=0, minute=0, second=5
+            )
+        )
+
+    @callback
+    def _handle_midnight(self, _now: datetime) -> None:
+        self.async_write_ha_state()
+
+    def _estimate(self) -> Estimate | None:
+        assert self._settings is not None
+        return estimate(self._history.latest, self._settings, dt_util.now().date())
+
+    @property
+    def native_value(self) -> Any:
+        """Return the estimate."""
+        if (est := self._estimate()) is None:
+            return None
+        return self.entity_description.value_fn(est)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Show the inputs, so the estimate can be checked."""
+        assert self._settings is not None
+        attrs: dict[str, Any] = {
+            "hours_per_week": self._settings.hours_per_week,
+            "initial_tension_loss": self._settings.initial_loss,
+            "tension_loss_per_hour": self._settings.loss_per_hour,
+        }
+        if self.entity_description.key == "estimated_tension":
+            est = self._estimate()
+            attrs["strung_tension"] = _latest(self._history, ATTR_MAIN_TENSION)
+            attrs["strung_cross_tension"] = _latest(self._history, ATTR_CROSS_TENSION)
+            attrs["estimated_cross_tension"] = est.cross_tension if est else None
+            attrs[ATTR_DATE] = _latest(self._history, ATTR_DATE)
+        return attrs

@@ -1,4 +1,4 @@
-# Racket String Tracker (Home Assistant integration)
+# Strung: tennis racket restring tracker (Home Assistant integration)
 
 A HACS integration that keeps a restring log for tennis rackets. Domain: `racket_tracker`.
 One config entry = one racket = one device.
@@ -11,10 +11,12 @@ custom_components/racket_tracker/
 ├── const.py           # DOMAIN, option keys, restring field names, action/event names
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
+├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
+├── tension.py         # Estimated tension: options["play"] (hours/week, initial loss, loss/hour) → estimate()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
-├── config_flow.py     # Add racket (name, details, collapsible "specs" section); options flow edits them
+├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible "specs"); options flow edits them
 ├── entity.py          # racket_device_info(entry)
-├── sensor.py          # History-derived sensors + one RacketSpecSensor per spec that has a value
+├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), one RacketSpecSensor per spec
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
 ├── services.yaml      # add_restring, update_restring, delete_restring, get_history
@@ -26,6 +28,7 @@ custom_components/racket_tracker/
 blueprints/automation/racket_tracker/  # restring_reminder, restring_logged, rate_strings
 examples/              # scripts.yaml (form UI), dashboard.yaml (built-in cards only)
 images/brand/*.svg     # Sources for brand/*.png (render with rsvg-convert, trim with ImageMagick)
+images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
 ```
 
@@ -40,8 +43,14 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   Whole-number tensions/costs are stored as ints (`_whole`).
 - `update_restring` without `restring_id` edits the latest restring.
 - Options: `brand`, `model`, `head_size`, `string_pattern`, `tension_unit`, `specs` (user's
-  measurements), `dataset_specs` (reserved for a future racket-database lookup; the options flow
-  preserves it). Changing options reloads the entry.
+  measurements), `dataset_specs` (unstrung weight, balance, swingweight, stiffness from the Racqix dataset) and
+  `dataset_racket` (`slug`, `name`, `version`). The options flow keeps both unless "Use looked-up
+  specs" is turned off. Dataset details only fill brand/model/head size/pattern the user left
+  blank. Changing options reloads the entry.
+- `play` (optional section): `hours_per_week`, `initial_tension_loss` (default 10 %),
+  `tension_loss_per_hour` (default 1 %). Without hours/week the estimate sensors are removed.
+- The dataset (`https://www.racqix.com/api/racquets?mode=minimal`) is the integration's only
+  network request; tests mock it with `aioclient_mock`.
 
 ## Photos
 

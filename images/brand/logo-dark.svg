@@ -30,6 +30,6 @@
   <circle cx="74" cy="182" r="26" fill="#DFFF4F"/>
   <path d="M52 168 Q74 182 60 202 M88 162 Q74 182 96 196" fill="none" stroke="#1D3557" stroke-width="4" stroke-linecap="round"/>
 </g>
-  <text x="290" y="150" font-family="Inter" font-weight="700" font-size="112" letter-spacing="-3" fill="#FFFFFF">Racket Strings</text>
-  <text x="294" y="208" font-family="Inter" font-weight="500" font-size="40" fill="#AEAEB2">for Home Assistant</text>
+  <text x="290" y="150" font-family="Inter" font-weight="700" font-size="112" letter-spacing="-3" fill="#FFFFFF">Strung</text>
+  <text x="294" y="208" font-family="Inter" font-weight="500" font-size="40" fill="#AEAEB2">Tennis restring tracker for Home Assistant</text>
 </svg>

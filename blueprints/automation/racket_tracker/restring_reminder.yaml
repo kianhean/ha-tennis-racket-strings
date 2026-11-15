@@ -2,11 +2,11 @@ blueprint:
   name: Racket – restring reminder
   description: >-
     Get a reminder when a racket's strings reach an age you choose. Uses the
-    **Days since restring** sensor from the Racket String Tracker integration.
+    **Days since restring** sensor from the Strung integration.
     Fires once each time the strings cross that age; logging a restring
     resets it.
   domain: automation
-  author: Racket String Tracker
+  author: Strung
   source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/restring_reminder.yaml
   homeassistant:
     min_version: 2025.7.0

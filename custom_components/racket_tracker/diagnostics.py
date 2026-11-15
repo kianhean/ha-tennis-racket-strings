@@ -1,4 +1,4 @@
-"""Diagnostics for Racket String Tracker."""
+"""Diagnostics for Strung."""
 
 from __future__ import annotations
 

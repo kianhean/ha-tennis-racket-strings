@@ -25,6 +25,13 @@
   <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=racket_tracker"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Open your Home Assistant instance and start adding a racket"></a>
 </p>
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/dashboard-dark.png">
+  <img src="images/screenshots/dashboard-light.png" alt="The example Rackets dashboard: photo, current hybrid strings, tension and estimated tension, specs from the dataset and your measurements, and a restring history table with photos" width="800">
+</picture>
+</p>
+
 ## What's inside
 
 | | | |
@@ -154,7 +161,15 @@ falls back to the dataset value, or disappears if there isn't one.
 Type the racket's brand and model under **Look up** when you add it (or later under **Configure**)
 and pick it from the matches. Strung then reads its **unstrung weight, balance, swingweight and
 stiffness** from the [Racqix Tennis Racquet Dataset](https://www.racqix.com/en/tennis-racquet-dataset)
-(about 1,250 rackets from 18 brands, 1998 to 2026). Not every racket has every value; swingweight is
+(about 1,250 rackets from 18 brands, 1998 to 2026).
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/lookup-dark.png">
+  <img src="images/screenshots/lookup-light.png" alt="Pick your racket: the Pure Aero 2023 variants found by a lookup" width="560">
+</picture>
+</p>
+ Not every racket has every value; swingweight is
 listed for roughly 40% of them.
 
 - The list is downloaded from racqix.com only when you search, and kept in memory for a day. Nothing
@@ -238,6 +253,16 @@ actions:
 
 ## Dashboard
 
+There's no automatic dashboard: you add the example view yourself. It takes a minute:
+
+1. Add the two scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
+   then reload them (**Developer tools → YAML → Scripts**).
+2. **Settings → Dashboards → Add dashboard → New dashboard from scratch**, name it *Rackets*, and open it.
+3. **✏️ → ⋮ → Raw configuration editor**, replace everything with `views:` and paste the contents of
+   [`examples/dashboard.yaml`](examples/dashboard.yaml) indented under `  - `.
+4. Replace `pure_aero` with your racket's entity prefix. Remove spec rows or the estimate tiles you
+   don't use.
+
 [`examples/dashboard.yaml`](examples/dashboard.yaml) is a complete sections view built only from
 Home Assistant's built-in cards:
 
@@ -247,7 +272,8 @@ Home Assistant's built-in cards:
 - the current setup's rating and notes, your specs, and tension (strung and estimated) over time
 - a history table with photo thumbnails, strings, tensions, cost, stars and notes
 
-Replace `pure_aero` with your racket's entity prefix. A test checks that every entity it uses exists.
+A test checks that every entity it uses exists. The screenshot at the top is this view in Home
+Assistant 2026.9 with example data (the photos are placeholders).
 
 A minimal history card:
 

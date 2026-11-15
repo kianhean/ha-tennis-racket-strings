@@ -15,6 +15,7 @@ from custom_components.racket_tracker.dataset import (
     Dataset,
     dataset_specs,
     label,
+    model_name,
     search,
 )
 
@@ -66,6 +67,24 @@ def test_search_and_label() -> None:
     assert search(dataset, "prince") == []
     assert search(dataset, "  ") == []
     assert label(PURE_AERO_2023) == "Babolat Pure Aero (2023) · 100 in² · 16x19 · 300 g"
+    assert model_name({**PURE_AERO_2023, "slug": "babolat-pure-aero-lite-2023"}) == (
+        "Pure Aero Lite"
+    )
+    assert model_name(
+        {"slug": "yonex-vcore-100", "brand": "Yonex", "model": "VCore"}
+    ) == ("VCore 100")
+    assert (
+        model_name(
+            {
+                "slug": "volkl-v-feel-8-315-g-2019",
+                "brand": "Volkl",
+                "model": "V-Feel",
+                "year": "2019",
+            }
+        )
+        == "V-Feel 8 315 G"
+    )
+    assert model_name(RACQUETS[2]) == "Blade 98 V9"
     assert dataset_specs(RACQUETS[2]) == {"unstrung_weight": 305, "stiffness": 62}
 
 

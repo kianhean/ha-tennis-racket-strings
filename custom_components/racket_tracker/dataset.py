@@ -9,6 +9,7 @@ under the user's own measurements (see specs.effective_specs).
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_BRAND, CONF_HEAD_SIZE, CONF_MODEL, CONF_STRING_PATTERN
 from .specs import CONF_DATASET_SPECS, SPECS
+
+_LOGGER = logging.getLogger(__name__)
 
 DATASET_URL = "https://www.racqix.com/api/racquets?mode=minimal"
 DATASET_NAME = "Racqix Tennis Racquet Dataset"
@@ -67,9 +70,13 @@ async def async_get_dataset(hass: HomeAssistant) -> Dataset:
             resp.raise_for_status()
             payload = await resp.json(content_type=None)
     except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+        _LOGGER.warning(
+            "Couldn't fetch the racket dataset from %s: %r", DATASET_URL, err
+        )
         raise DatasetError(str(err)) from err
     racquets = payload.get("racquets") if isinstance(payload, dict) else None
     if not isinstance(racquets, list):
+        _LOGGER.warning("Unexpected response from %s", DATASET_URL)
         raise DatasetError("unexpected response")
     dataset = Dataset(
         version=str(payload.get("dataset_version") or ""),
@@ -107,9 +114,38 @@ def search(dataset: Dataset, query: str) -> list[dict[str, Any]]:
     return matches[:MAX_MATCHES]
 
 
+def _slugify(text: str) -> str:
+    return "-".join(_tokens(text))
+
+
+def model_name(racquet: dict[str, Any]) -> str:
+    """Full model name, e.g. "Pure Aero Lite" from babolat-pure-aero-lite-2023.
+
+    The dataset's `model` is often only the family ("Pure Aero"); the slug keeps
+    the variant (98, Lite, Team, Plus...). The dataset's spelling is kept for the
+    part of the slug it covers.
+    """
+    model = str(racquet.get("model") or "").strip()
+    rest = str(racquet["slug"])
+    brand = _slugify(str(racquet.get("brand") or ""))
+    if brand and rest.startswith(brand + "-"):
+        rest = rest[len(brand) + 1 :]
+    year = str(racquet.get("year") or "")
+    if year and rest.endswith("-" + year):
+        rest = rest[: -len(year) - 1]
+    words: list[str] = []
+    if model and (rest == _slugify(model) or rest.startswith(_slugify(model) + "-")):
+        words.append(model)
+        rest = rest[len(_slugify(model)) + 1 :]
+    words += [w if w.isdigit() else w.capitalize() for w in rest.split("-") if w]
+    return " ".join(words) or model
+
+
 def label(racquet: dict[str, Any]) -> str:
     """One line, e.g. "Babolat Pure Aero (2023) · 100 in² · 16x19 · 300 g"."""
-    name = " ".join(str(racquet[k]) for k in ("brand", "model") if racquet.get(k))
+    name = " ".join(
+        part for part in (str(racquet.get("brand") or ""), model_name(racquet)) if part
+    )
     if racquet.get("year"):
         name += f" ({racquet['year']})"
     details = [name or racquet["slug"]]
@@ -146,9 +182,10 @@ def dataset_specs(racquet: dict[str, Any]) -> dict[str, int | float]:
 def racket_details(racquet: dict[str, Any]) -> dict[str, Any]:
     """Brand, model, head size and string pattern from a dataset entry."""
     out: dict[str, Any] = {}
-    for field in (CONF_BRAND, CONF_MODEL):
-        if isinstance(racquet.get(field), str) and racquet[field].strip():
-            out[field] = racquet[field].strip()
+    if isinstance(racquet.get(CONF_BRAND), str) and racquet[CONF_BRAND].strip():
+        out[CONF_BRAND] = racquet[CONF_BRAND].strip()
+    if model := model_name(racquet):
+        out[CONF_MODEL] = model
     head = _number(racquet.get("head_size"))
     if head is not None and 80 <= head <= 135:
         out[CONF_HEAD_SIZE] = head

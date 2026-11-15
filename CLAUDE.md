@@ -28,6 +28,7 @@ custom_components/racket_tracker/
 blueprints/automation/racket_tracker/  # restring_reminder, restring_logged, rate_strings
 examples/              # scripts.yaml (form UI), dashboard.yaml (built-in cards only)
 images/brand/*.svg     # Sources for brand/*.png (render with rsvg-convert, trim with ImageMagick)
+images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
 ```
 

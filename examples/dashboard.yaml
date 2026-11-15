@@ -23,9 +23,11 @@ sections:
         aspect_ratio: "4:3"
       - type: tile
         entity: sensor.pure_aero_strings
+        name: Strings
         grid_options: { columns: 12 }
       - type: tile
         entity: sensor.pure_aero_tension
+        name: Tension
         grid_options: { columns: 6 }
       - type: tile
         entity: sensor.pure_aero_days_since_restring
@@ -33,6 +35,7 @@ sections:
         grid_options: { columns: 6 }
       - type: tile
         entity: sensor.pure_aero_last_restrung
+        name: Last restrung
         grid_options: { columns: 6 }
       - type: tile
         entity: sensor.pure_aero_total_string_cost
@@ -41,11 +44,11 @@ sections:
       # Needs "Hours of play per week" set on the racket (Configure → Play)
       - type: tile
         entity: sensor.pure_aero_estimated_tension
-        name: Tension now (est.)
+        name: Est. tension
         grid_options: { columns: 6 }
       - type: tile
         entity: sensor.pure_aero_estimated_tension_loss
-        name: Tension lost (est.)
+        name: Est. tension loss
         grid_options: { columns: 6 }
       - type: button
         name: Log restring
@@ -89,18 +92,28 @@ sections:
         # Only specs you entered (or that were looked up) exist; remove the rest.
         state_color: false
         entities:
-          - sensor.pure_aero_strung_weight
-          - sensor.pure_aero_balance
-          - sensor.pure_aero_swingweight
-          - sensor.pure_aero_stiffness
-          - sensor.pure_aero_recommended_tension_min
-          - sensor.pure_aero_recommended_tension_max
+          - entity: sensor.pure_aero_strung_weight
+            name: Strung weight
+          - entity: sensor.pure_aero_unstrung_weight
+            name: Unstrung weight
+          - entity: sensor.pure_aero_balance
+            name: Balance
+          - entity: sensor.pure_aero_swingweight
+            name: Swingweight
+          - entity: sensor.pure_aero_stiffness
+            name: Stiffness
+          - entity: sensor.pure_aero_recommended_tension_min
+            name: Tension (min)
+          - entity: sensor.pure_aero_recommended_tension_max
+            name: Tension (max)
       - type: history-graph
         title: Tension over time
         hours_to_show: 8760
         entities:
           - entity: sensor.pure_aero_tension
+            name: Strung
           - entity: sensor.pure_aero_estimated_tension
+            name: Estimated
 
   # ── Full history with photos ─────────────────────────────────────
   - type: grid
@@ -108,22 +121,25 @@ sections:
     cards:
       - type: heading
         heading: Restring history
+        grid_options: { columns: full }
       - type: markdown
-        content: >
-          {% set history = state_attr('sensor.pure_aero_restrings', 'history') or [] %}
-          {% set cur = state_attr('sensor.pure_aero_total_string_cost', 'unit_of_measurement') %}
-          {% if history | count == 0 %}
+        grid_options: { columns: full }
+        # One table row per restring; "-" in {%- -%} keeps each row on one line.
+        content: |
+          {% set history = state_attr('sensor.pure_aero_restrings', 'history') or [] -%}
+          {% set cur = state_attr('sensor.pure_aero_total_string_cost', 'unit_of_measurement') -%}
+          {% if history | count == 0 -%}
           No restrings logged yet.
-          {% else %}
+          {%- else -%}
           | Photo | Date | Strings | Tension | Cost | Rating | Notes |
           |:-:|---|---|---|--:|---|---|
           {% for r in history -%}
-          | {% if r.image_url %}<a href="{{ r.image_url }}" target="_blank"><img src="{{ r.image_url }}" width="64"></a>{% endif %}
-          | {{ r.date }}
-          | {{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif %}
-          | {{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit }}
-          | {{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is not none else '' }}
-          | {{ '⭐' * r.rating if r.rating else '' }}
-          | {{ (r.notes or '') | replace('\n', ' ') }} |
-          {% endfor %}
+          | {% if r.image_url %}<a href="{{ r.image_url }}" target="_blank"><img src="{{ r.image_url }}" width="72"></a>{% endif -%}
+          {{ ' | ' }}{{ r.date -}}
+          {{ ' | ' }}{{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif -%}
+          {{ ' | ' }}{{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit -}}
+          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is not none else '' -}}
+          {{ ' | ' }}{{ '⭐' * r.rating if r.rating else '' -}}
+          {{ ' | ' }}{{ (r.notes or '') | replace('\n', ' ') | replace('|', '/') }} |
+          {% endfor -%}
           {% endif %}

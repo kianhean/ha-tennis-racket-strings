@@ -28,6 +28,7 @@ def test_catalog() -> None:
     assert "Solinco Hyper-G 17 (1.20)" in NAMES
     # from string_catalog_extra.json
     assert {"Toroline Caviar 17 (1.20)", "ReString Zero 17 (1.23)"} <= set(NAMES)
+    assert "Grapplesnake Tour M8 16 (1.30)" in NAMES
 
 
 def test_material() -> None:
@@ -39,6 +40,8 @@ def test_material() -> None:
     assert material("O-Toro Snap 1.25") == "polyester"
     assert material("ReString Sync 16") == "polyester"
     assert material("Solinco Mach-10") == "polyester"
+    assert material("Grapplesnake Tour M8 17") == "polyester"  # any gauge
+    assert material("Tour Sniper 1.25") == "polyester"
     assert material("Toroline Truffle X") is None  # "not polyester", type unknown
     assert material("Something Unknown 17") is None
     assert material("") is None and material(None) is None

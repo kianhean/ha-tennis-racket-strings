@@ -1,11 +1,22 @@
 {
   "comment": "Strings missing from the bundled CC0 list (string_catalog.json). Same format: [brand, model, string type]. Add newer strings here once their material is confirmed.",
   "sources": {
+    "Grapplesnake": "racqix.com Grapplesnake comparison (Material: co-polyester for every model; gauges as listed there), November 2026",
     "ReString": "shoprestring.com product pages and blog (co-poly / recycled polyester), November 2026",
     "Solinco": "Mach-10: polyester, confirmed by the maintainer, November 2026",
     "Toroline": "toroline.com product pages (Material: Co-polyester); Truffle X is 'a high performance polymer, not polyester', so no type, November 2026"
   },
   "strings": [
+    ["Grapplesnake", "Alpha 17 (1.25)", "polyester"],
+    ["Grapplesnake", "Aspera Triplum 18", "polyester"],
+    ["Grapplesnake", "Game Changer 17", "polyester"],
+    ["Grapplesnake", "Game Changer V1 17", "polyester"],
+    ["Grapplesnake", "Irukandji 17", "polyester"],
+    ["Grapplesnake", "Paradox Pro 16L (1.25)", "polyester"],
+    ["Grapplesnake", "Soldier 16L (1.25)", "polyester"],
+    ["Grapplesnake", "Tour M8 16 (1.30)", "polyester"],
+    ["Grapplesnake", "Tour Mako 16L (1.25)", "polyester"],
+    ["Grapplesnake", "Tour Sniper 16 (1.30)", "polyester"],
     ["ReString", "Slap 16 (1.28)", "polyester"],
     ["ReString", "Slap 17 (1.23)", "polyester"],
     ["ReString", "Sync 16 (1.30)", "polyester"],

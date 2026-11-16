@@ -105,8 +105,9 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
   link's). Tests patch `async_schedule_refresh` (conftest) and mock the list with `aioclient_mock`.
   The bundled copy is kept fresh by `scripts/update_dataset.py` (stdlib only): `workflow_call`
   replaces the file right before `release.yml` zips (never failing the release), and
-  `dataset-refresh.yml` runs `--check` daily and opens/updates the `dataset/refresh` PR, plus an
-  empty commit to main so scheduled workflows keep running. A 429 from either URL is never
+  `dataset-refresh.yml` runs `--check` daily and opens/updates the `dataset/refresh` PR (needs
+  "Allow GitHub Actions to create and approve pull requests"; else it fails with that hint), plus a
+  monthly empty commit to main (second cron) so scheduled workflows keep running. A 429 from either URL is never
   written; a payload needs >= `MIN_RACQUETS` and a version. Tests load it by path and point the
   files at `tmp_path` (`tests/test_dataset_update.py`).
 - String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring
@@ -156,7 +157,9 @@ makes `release.yml` tag `v<version>`, create the GitHub release and attach `rack
 
 The bundled Racqix list is refreshed by each release: `release.yml` runs
 `python scripts/update_dataset.py` right before `git archive`, and on failure (Racqix's 429
-challenge) releases what is committed. A release doesn't bump the manifest. To refresh the file
+challenge) releases what is committed. A changed list is committed in the job (not on main) and
+the tag is pushed on that commit, so tag and zip match; if the tag push fails, the commit is
+dropped. A release doesn't bump the manifest. To refresh the file
 by hand: `python scripts/update_dataset.py` (adds the notice's served-on date); commit it and
 bump the version only if the data should ship now.
 

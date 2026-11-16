@@ -45,14 +45,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check whether tag already exists
+      # A release, not just a tag: the refresh step below can push the tag before the release
+      # is created, and a rerun after a failure there must still create it.
+      - name: Check whether the release already exists
         id: tag_check
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+          if gh release view "$TAG" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $TAG already exists; skipping release."
+            echo "Release $TAG already exists; skipping."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -61,16 +64,34 @@ jobs:
       # carries the newest copy. A download Racqix refuses changes nothing (scripts/update_dataset.py
       # leaves the file alone) and keeps the step green: it mustn't hold up a release.
       # git archive reads HEAD, not the working tree, so a refreshed list is committed here
-      # (in this job only, never pushed) for the zip to include it. The tag stays on main's commit.
+      # (never pushed to main) and the release tag is pushed on that commit: the tag's source and
+      # the zip are then the same files. If the tag can't be pushed, the commit is dropped and
+      # the release is built from main's commit as before.
       - name: Refresh the bundled racquet list
         if: steps.tag_check.outputs.exists == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            # A rerun: the tag exists without a release, so release exactly what it points at
+            git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
+            git checkout -q "$TAG"
+            echo "::notice::$TAG already exists; releasing its files"
+            exit 0
+          fi
           python scripts/update_dataset.py || echo "::notice::Couldn't refresh the bundled list; releasing as committed"
           if ! git diff --quiet -- custom_components/racket_tracker; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -qm "Refresh the bundled Racqix list for the release" -- custom_components/racket_tracker
-            echo "::notice::Releasing with the refreshed list"
+            git commit -qm "Refresh the bundled Racqix list for $TAG" -- custom_components/racket_tracker
+            git tag "$TAG"
+            if git push origin "refs/tags/$TAG"; then
+              echo "::notice::Releasing $TAG with the refreshed list"
+            else
+              echo "::warning::Couldn't push $TAG on the refreshed list; releasing as committed"
+              git tag -d "$TAG"
+              git reset -q --hard HEAD~1
+            fi
           fi
 
       # HACS installs this zip (hacs.json: zip_release + filename) instead of the source

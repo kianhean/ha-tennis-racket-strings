@@ -39,7 +39,7 @@
 | 🔔 **Restring due**<br>Restring after N days, N hours of play, or when the estimated tension drops to a set value: a [due sensor and a calendar](#restring-due) | 🔁 **Usual setup**<br>Save your usual string job and [log it in one tap](#usual-setup) | 📅 **Calendar**<br>Every restring, and the next one due, in HA's calendar |
 | 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, that you can calibrate with a measurement |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
-| 🧶 **String suggestions**<br>Pick from [~780 strings](#string-suggestions) or type your own; the string's material sets the tension estimate | 💥 **Breakages and string life**<br>[One tap when strings break](#when-strings-break); average string life, breakage rate, spend this year, cost per hour and your favourite setup | 💾 **Import and export**<br>[CSV in and out](#import-and-export): back up, or bring your restring spreadsheet |
+| 🧶 **String suggestions**<br>Pick from [~810 strings](#string-suggestions) or type your own; the string's material sets the tension estimate | 💥 **Breakages and string life**<br>[One tap when strings break](#when-strings-break); average string life, breakage rate, spend this year, cost per hour and your favourite setup | 💾 **Import and export**<br>[CSV in and out](#import-and-export): back up, or bring your restring spreadsheet |
 | 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
 
 ## Installation
@@ -136,13 +136,14 @@ data:
 ### String suggestions
 
 The string fields in **Add restring**, **Update restring** and the racket's **Usual setup** suggest
-strings as you type: first the ones you've already logged, then a built-in list of about 780
+strings as you type: first the ones you've already logged, then a built-in list of about 810
 strings with their material. Pick one or type anything; a string that isn't on the list is fine.
 
 The list is the [Tennis Racquets and Strings Dataset](https://github.com/LukeBatten17/tennis-racquets-and-strings-dataset)
-(CC0, July 2024), so newer strings may be missing. PRs that add them to
-[`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json), with
-their material, are welcome. It ships with the integration, so nothing is downloaded. When the
+(CC0, July 2024), plus Toroline, ReString and Solinco Mach-10 in
+[`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json), with the
+material from the maker's own product pages. Other newer strings may be missing; PRs that add them
+there, with their material, are welcome. It ships with the integration, so nothing is downloaded. When the
 racket has no string type set, the [tension estimate](#estimated-tension) uses the material of the
 current main string from this list (gauge and brand don't need to match: "Hyper-G 1.25" finds
 Solinco Hyper-G).
@@ -208,16 +209,23 @@ stiffness** from the [Racqix Tennis Racquet Dataset](https://www.racqix.com/en/t
  Not every racket has every value; swingweight is
 listed for roughly 40% of them.
 
-- The list is downloaded from racqix.com only when you search, and kept in memory for a day. Nothing
-  about you or your rackets is sent.
+- The list is downloaded from racqix.com at most once a day (in the background after Home
+  Assistant starts) and kept in `.storage`, so restarts don't download it again. Nothing about you
+  or your rackets is sent.
+- If it can't be downloaded (Racqix's bot protection sometimes answers Home Assistant with
+  `429 Too Many Requests`), Strung searches the last download, or else the copy that ships with
+  the integration ([`racqix_dataset.json`](custom_components/racket_tracker/racqix_dataset.json),
+  v2026.1, an unmodified copy under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/),
+  [notice](custom_components/racket_tracker/racqix_dataset.NOTICE.md)). The pick step then says
+  "offline copy".
 - Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
 - To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
 - When a linked racket is set up (at startup, or after a change), Strung checks it against the
   dataset and raises a **repair** under **Settings → System → Repairs** if the dataset changed
   its specs (fix: take the new values; your measurements still win), if the racket is no longer
   in it (fix: unlink and keep the specs), or if the dataset can't be reached (the specs keep
-  working). This asks racqix.com for that one racket only (not the whole list), at most once a day, and
-  at most once an hour after a failure.
+  working). It uses the same daily list (or its offline copy, if that is as new as the version the
+  racket was linked from), so it never makes a request of its own.
 
 ## Estimated tension
 

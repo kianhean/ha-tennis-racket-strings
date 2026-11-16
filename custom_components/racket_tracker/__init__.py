@@ -59,6 +59,7 @@ from .const import (
     SETUP_FIELDS,
     TENSION_UNIT_LBS,
 )
+from .dataset import async_schedule_refresh
 from .history import RacketHistory, new_restring_id, with_image_url
 from .history_io import (
     async_read_import,
@@ -336,6 +337,7 @@ def usual_setup(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the integration's actions and the photo URL path."""
+    async_schedule_refresh(hass)
     folder = image_dir(hass)
     await hass.async_add_executor_job(lambda: folder.mkdir(parents=True, exist_ok=True))
     await hass.http.async_register_static_paths(

@@ -26,6 +26,8 @@ def test_catalog() -> None:
     assert len(CATALOG) > 750
     assert {kind for *_, kind in CATALOG} <= {*STRING_TYPES, None}
     assert "Solinco Hyper-G 17 (1.20)" in NAMES
+    # from string_catalog_extra.json
+    assert {"Toroline Caviar 17 (1.20)", "ReString Zero 17 (1.23)"} <= set(NAMES)
 
 
 def test_material() -> None:
@@ -33,6 +35,11 @@ def test_material() -> None:
     assert material("solinco hyper-g") == "polyester"
     assert material("Babolat VS Touch 16") == "gut"
     assert material("Synthetic Gut 16") == "nylon"
+    assert material("Toroline Wasabi") == "polyester"
+    assert material("O-Toro Snap 1.25") == "polyester"
+    assert material("ReString Sync 16") == "polyester"
+    assert material("Solinco Mach-10") == "polyester"
+    assert material("Toroline Truffle X") is None  # "not polyester", type unknown
     assert material("Something Unknown 17") is None
     assert material("") is None and material(None) is None
 

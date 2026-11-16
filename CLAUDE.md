@@ -26,6 +26,7 @@ custom_components/racket_tracker/
 ├── binary_sensor.py   # restring_due (only with due rules)
 ├── calendar.py        # calendar.<racket>_restrings: all-day event per restring + next due
 ├── button.py          # Restring with usual setup → usual_setup() + async_log_restring(); Strings broke → async_mark_broken()
+├── text.py / number.py # Usual setup fields in the device page's Controls (UsualSetupEntity in entity.py)
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
 ├── services.yaml      # add_restring, repeat_restring, calibrate_tension, update_restring, delete_restring, get_history, export_history, import_history
@@ -75,6 +76,9 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
 - `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,
   `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
   button use it, else the latest restring. All logging goes through `async_log_restring()`.
+  The `usual_*` text/number entities edit it in place: a change to `setup` alone doesn't
+  reload the entry (`_options_needing_reload`), so they can be partial; the flow still needs main
+  string + tension.
 - Racqix is the integration's only network host. The list (`/api/racquets?mode=minimal`, ~1 MB;
   the API ignores search/filter params) is downloaded at most once a day, success or not
   (`attempted` in the store): in the background after HA starts, or on a search. Racqix's Vercel

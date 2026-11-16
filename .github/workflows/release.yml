@@ -60,9 +60,18 @@ jobs:
       # The bundled Racqix list is what installs that can't download it search, so each release
       # carries the newest copy. A download Racqix refuses changes nothing (scripts/update_dataset.py
       # leaves the file alone) and keeps the step green: it mustn't hold up a release.
+      # git archive reads HEAD, not the working tree, so a refreshed list is committed here
+      # (in this job only, never pushed) for the zip to include it. The tag stays on main's commit.
       - name: Refresh the bundled racquet list
         if: steps.tag_check.outputs.exists == 'false'
-        run: python scripts/update_dataset.py || echo "::notice::Couldn't refresh the bundled list; releasing as committed"
+        run: |
+          python scripts/update_dataset.py || echo "::notice::Couldn't refresh the bundled list; releasing as committed"
+          if ! git diff --quiet -- custom_components/racket_tracker; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -qm "Refresh the bundled Racqix list for the release" -- custom_components/racket_tracker
+            echo "::notice::Releasing with the refreshed list"
+          fi
 
       # HACS installs this zip (hacs.json: zip_release + filename) instead of the source
       # archive, so GitHub counts every install and update: the README downloads badge.

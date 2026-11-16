@@ -25,6 +25,7 @@ from custom_components.racket_tracker.tension import (
     migrate_play_options,
     move_old_presets,
     play_settings,
+    twu_scale,
     uses_old_presets,
 )
 
@@ -110,12 +111,12 @@ def test_play_settings() -> None:
 
 
 def test_presets_match_the_measured_totals() -> None:
-    """The three terms together land near TWU's measured loss for each material.
+    """The three terms together land at or just below TWU's range for each material.
 
     Two weeks at 4 h/week is about when most recreational string beds are restrung;
     TWU's medians are 41 % (polyester), 21 % (nylon) and 15 % (gut), with measured
-    ranges of 27-55, 17-34 and 10-19 %. The split is TWU's: most of a polyester's
-    loss is idle (its "stabilization"), most of nylon's is play.
+    ranges of 27-55, 17-34 and 10-19 %. For every type most of the two-week loss
+    is idle (first day plus relaxation); play adds the rest.
     """
     for string_type, low, high in (
         ("polyester", 20, 30),
@@ -132,6 +133,36 @@ def test_presets_match_the_measured_totals() -> None:
         < loss_percent(STRING_TYPES["nylon"], 365, 200)
         < loss_percent(STRING_TYPES["polyester"], 365, 200)
     )
+
+
+def test_twu_value_gives_the_same_estimate_for_every_type() -> None:
+    """Two strings measured at the same TWU loss aren't ranked by their type."""
+    for twu in (15, 21, 30, 41, 55):
+        totals = {
+            string_type: loss_percent(
+                play_settings(
+                    {
+                        "play": {
+                            "hours_per_week": 4,
+                            "string_type": string_type,
+                            "twu_tension_loss": twu,
+                        }
+                    }
+                ).rates,
+                14,
+                8,
+            )
+            for string_type in STRING_TYPES
+        }
+        expected = twu / 41 * loss_percent(POLY, 14, 8)
+        for string_type, total in totals.items():
+            assert total == pytest.approx(expected, abs=0.1), (twu, string_type)
+    # Polyester is scaled by value / 41 exactly, as before
+    poly = play_settings({"play": {"hours_per_week": 4, "twu_tension_loss": 30}})
+    assert poly.rates == LossRates(initial=7.32, first_hour=2.2, relaxation=2.93)
+    # The presets' places on that scale: nylon ~26 %, gut ~21 %
+    assert twu_scale(26, "nylon") == pytest.approx(1, abs=0.01)
+    assert twu_scale(21.3, "gut") == pytest.approx(1, abs=0.01)
 
 
 def test_calibrate() -> None:

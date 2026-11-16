@@ -638,10 +638,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> 
             options[CONF_PLAY] = migrate_play_options(play)
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
     if entry.minor_version < PRESET_MINOR_VERSION:
-        # 1.3: the tension presets were recalibrated to the measured loss.
-        # Values saved from the old form are the old presets: move them, so an
-        # estimate doesn't jump by 40-80 % for reasons the user can't see. A rate
-        # the user really changed, or a calibrated racket, keeps its options.
+        # 1.3: the nylon and gut presets were raised. A rate equal to an old
+        # preset was most likely typed in from the form's "Default: ..." help
+        # text, so it moves with the preset; any other rate, or a calibrated
+        # one, is the user's own and stays.
         if uses_old_presets(play := entry.options.get(CONF_PLAY) or {}):
             hass.config_entries.async_update_entry(
                 entry,

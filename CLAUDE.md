@@ -61,22 +61,24 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
   specs" is turned off. Dataset details only fill brand/model/head size/pattern the user left
   blank. Changing options reloads the entry.
 - `play` (optional section): `hours_per_week`, `string_type` (polyester/nylon/gut presets),
-  `twu_tension_loss` (the string's TWU "Tension Loss (%)": scales the preset by value / median of the
-  type, `TWU_MEDIAN_LOSS`) and optional overrides `initial_tension_loss`, `first_hour_loss`,
+  `twu_tension_loss` (the string's TWU "Tension Loss (%)": `twu_scale()` scales the type's preset so
+  its total at 2 weeks / 4 h/week equals polyester's preset total × value / 41, so equal values give
+  equal estimates whatever the type) and optional overrides `initial_tension_loss`, `first_hour_loss`,
   `relaxation_loss`. `play_settings(options, record)`: without `string_type`, the record's main
   string's material from the string catalog, else polyester (`string_type_source`). Pass the
   restring whose estimate you want (backfill does it per record).
   loss = initial + relaxation·log10(days) + first_hour·log2(1 + hours), capped at 50 %. The
-  presets are set so that, with the TWU loss at its type's median, the total is about 24 %
-  (polyester), 15 % (nylon) and 12.5 % (gut) after 2 weeks at 4 h/week — inside TWU's measured
-  range for each type and well below the medians, which is deliberate (see the docstring).
+  presets give a total of about 24 % (polyester), 15 % (nylon) and 12.5 % (gut) after 2 weeks at
+  4 h/week — just below the low end of TWU's measured range for polyester (27 %) and nylon
+  (17 %), inside it for gut, and below every median, which is deliberate (see the docstring). On the TWU scale nylon's preset is ~26 % and gut's ~21 %.
   The model and its presets are cited in `tension.py` and README "Where the numbers come from";
   keep both in sync. `calibrate_tension` scales all three rates to a measured tension. Entry
   minor version 2 migrated the old linear `tension_loss_per_hour` (×3 → `first_hour_loss`). Minor
-  version 3 (`PRESET_MINOR_VERSION`) recalibrated the presets to the TWU-measured totals (they
-  were ~0.6×); `async_migrate_entry` also moves stored values equal to the old preset
-  (`OLD_PRESETS`, `uses_old_presets`, `move_old_presets`) because the play form saved the
-  suggested value as the racket's own rate — a rate the user changed, or a calibrated one, stays.
+  version 3 (`PRESET_MINOR_VERSION`) raised the nylon and gut presets (polyester unchanged; their
+  two-week totals rose ~18 % and ~40 %); `async_migrate_entry` also moves stored values equal to
+  the old preset (`OLD_PRESETS`, `uses_old_presets`, `move_old_presets`), which users could only
+  have typed from the old "Default: ..." help text (the form never prefilled them) — any other
+  rate, or a calibrated one, stays. Without a string type only polyester's old preset is compared.
   Migration steps run only below their minor version (HA may call it more than once per setup),
   and the flow's `MINOR_VERSION` is `PRESET_MINOR_VERSION` so new entries are never migrated.
   Without hours/week the estimate sensors are removed; tests in `tests/test_tension.py` cover

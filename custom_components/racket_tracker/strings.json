@@ -54,7 +54,7 @@
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 6%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1.5%.",
               "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 \u2192 10 \u2192 100 days). Default: polyester 4%, nylon 4%, gut 1.5%.",
-              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates by how it compares with the median (polyester 41%, nylon 21%, gut 15%)."
+              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates so the same measured loss gives the same estimate for any type: 41% gives the polyester default, 20.5% half of it."
             }
           },
           "due": {
@@ -198,7 +198,7 @@
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 6%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1.5%.",
               "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 \u2192 10 \u2192 100 days). Default: polyester 4%, nylon 4%, gut 1.5%.",
-              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates by how it compares with the median (polyester 41%, nylon 21%, gut 15%)."
+              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates so the same measured loss gives the same estimate for any type: 41% gives the polyester default, 20.5% half of it."
             }
           },
           "due": {

@@ -267,10 +267,12 @@ Without a string type, the current main string's material from the
 **Your string's own tension loss.** Tennis Warehouse University's
 String Performance Database (on its website) lists a
 measured **Tension Loss (%)** for hundreds of strings. Enter your usual main string's value as
-**String's tension loss in the TWU database** and the string type's rates are scaled by how it
-compares with the median for that type (polyester 41 %, nylon 21 %, gut 15 %): a polyester at
-30 % loses 30/41 of the polyester defaults. Rates you type in, or calibrate, still win. The
-defaults are calibrated so that the estimate is a little below the TWU average for each material
+**String's tension loss in the TWU database** and the string type's rates are scaled so that the
+same measured loss gives the same estimate after two weeks at 4 hours a week, whatever the type:
+41 % (the polyester median) gives the polyester defaults and a string at 30 % loses 30/41 of
+that. The nylon and gut defaults correspond to a string measured at about 26 % and 21 %, a
+little above their types' medians (nylon 21 %, gut 15 %), so a string measured at its type's
+median gets a lower estimate than the default. Rates you type in, or calibrate, still win
 (see [where the numbers come from](#where-the-numbers-come-from)).
 
 Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours played:
@@ -302,7 +304,9 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
   A string clamped at 28 kg read 24.8 kg after 17 minutes, 21.9 kg after 3 days and an extrapolated
   19.1 kg after a year: about **4.3 % of the strung tension per tenfold time**
   ([Cross & Bower 2001](https://www.physics.usyd.edu.au/~cross/PUBLICATIONS/19.%20MeasureStringT.PDF)).
-  That is the polyester and nylon relaxation rate; their sample was nylon.
+  Their sample was nylon, so that is the nylon rate. The same paper says "polyester strings lose
+  tension more rapidly than nylon": polyester's 4 % is a lower bound, and its larger first-day and
+  play rates keep its estimate above nylon's.
 - **Play costs most at first.** "Successive impacts result in successively smaller drops in
   tension", and about half of the drop over ten hard impacts came on the first (Cross & Bower 2001).
   "After using the racket for one or two sets, the tension will drop a further one or two kg"
@@ -311,9 +315,9 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
 - **Materials.** "Natural gut has one of the lowest rates of tension loss … while all polyester
   strings lose tension rapidly" (Cross et al. 2000). "Polyester loses more than nylon which loses
   more than gut" (Lindsey, "How Tennis Strings Go Dead", Tennis Warehouse University, 2013).
-  Gut loses least of the three, nylon sits between, and nylon's play loss is set a little higher
-  than polyester's because Tennis Warehouse University's measurements show nylon losing about
-  twice as much tension in its impact test. The medians that scale a string's own value
+  Gut loses least of the three and nylon sits between, at every age and amount of play. Nylon
+  and gut share their first-day and play rates; gut relaxes more slowly, which is what keeps it
+  below nylon. The medians behind a string's own value
   (polyester 41 %, nylon 21 %, gut 15 %) are Tennis Warehouse University's
   ([summary](https://thetennisindex.com/guides/compendium/string-types)).
 - **Initial loss.** Measured against the stringing machine's pull, strings lose much more in the

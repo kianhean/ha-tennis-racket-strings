@@ -143,13 +143,13 @@ data:
 ### String suggestions
 
 The string fields in **Add restring**, **Update restring** and the racket's **Usual setup** suggest
-strings as you type: first the ones you've already logged, then a built-in list of about 810
+strings as you type: first the ones you've already logged, then a built-in list of about 820
 strings with their material. Pick one or type anything; a string that isn't on the list is fine.
 
 The list is the [Tennis Racquets and Strings Dataset](https://github.com/LukeBatten17/tennis-racquets-and-strings-dataset)
-(CC0, July 2024), plus Toroline, ReString and Solinco Mach-10 in
+(CC0, July 2024), plus Toroline, ReString, Grapplesnake and Solinco Mach-10 in
 [`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json), with the
-material from the maker's own product pages. Other newer strings may be missing; PRs that add them
+material from the maker's own product pages (Grapplesnake's from Racqix). Other newer strings may be missing; PRs that add them
 there, with their material, are welcome. It ships with the integration, so nothing is downloaded. When the
 racket has no string type set, the [tension estimate](#estimated-tension) uses the material of the
 current main string from this list (gauge and brand don't need to match: "Hyper-G 1.25" finds

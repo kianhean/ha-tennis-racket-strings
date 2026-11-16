@@ -20,7 +20,7 @@ custom_components/racket_tracker/
 ├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
-├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible play/due/setup/specs); options flow edits them; reconfigure renames
+├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible current/play/due/setup/specs); options flow edits them; reconfigure renames
 ├── entity.py          # racket_device_info(entry), DailyRacketEntity (history + midnight), async_remove_entity
 ├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), StatsSensors (cost_per_hour only with hours/week), next_restring (only with due rules), one RacketSpecSensor per spec
 ├── binary_sensor.py   # restring_due (only with due rules)
@@ -73,6 +73,10 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
 - `due` (optional section): `days`, `hours_played`, `min_tension` (racket unit); earliest wins.
   `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
   due binary sensor and next_restring sensor are removed.
+- `current` (form section, never stored as an option): main/cross string + tension and `date`
+  → `async_set_current_strings()`. Same date as the latest restring edits it, else logs a restring.
+  The add flow keeps it in `entry.data` until setup logs it (then clears data); the options flow
+  prefills it from the latest restring and only shows it while the entry is loaded.
 - `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,
   `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
   button use it, else the latest restring. All logging goes through `async_log_restring()`.

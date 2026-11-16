@@ -19,6 +19,24 @@
           "string_pattern": "e.g. 16x19"
         },
         "sections": {
+          "current": {
+            "name": "Current strings (optional)",
+            "description": "The strings on the racket now. Saved as a restring on that date; on the latest restring's date it corrects that restring instead.",
+            "data": {
+              "main_string": "Main string",
+              "main_tension": "Main tension",
+              "cross_string": "Cross string",
+              "cross_tension": "Cross tension",
+              "date": "Strung on"
+            },
+            "data_description": {
+              "main_string": "Pick from the list or type any string.",
+              "main_tension": "In this racket's tension unit.",
+              "cross_string": "Hybrids only. Defaults to the main string.",
+              "cross_tension": "Defaults to the main tension.",
+              "date": "Defaults to today."
+            }
+          },
           "play": {
             "name": "Play and tension loss (optional)",
             "description": "Set how much you play this racket to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
@@ -118,7 +136,8 @@
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
       "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
       "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
-      "setup_incomplete": "The usual setup needs at least a main string and a main tension."
+      "setup_incomplete": "The usual setup needs at least a main string and a main tension.",
+      "current_incomplete": "The current strings need at least a main string and a main tension."
     },
     "abort": {
       "reconfigure_successful": "The racket was renamed."
@@ -144,6 +163,24 @@
           "use_dataset": "Turn off to stop using the dataset values for this racket."
         },
         "sections": {
+          "current": {
+            "name": "Current strings (optional)",
+            "description": "The strings on the racket now. Saved as a restring on that date; on the latest restring's date it corrects that restring instead.",
+            "data": {
+              "main_string": "Main string",
+              "main_tension": "Main tension",
+              "cross_string": "Cross string",
+              "cross_tension": "Cross tension",
+              "date": "Strung on"
+            },
+            "data_description": {
+              "main_string": "Pick from the list or type any string.",
+              "main_tension": "In this racket's tension unit.",
+              "cross_string": "Hybrids only. Defaults to the main string.",
+              "cross_tension": "Defaults to the main tension.",
+              "date": "Defaults to today."
+            }
+          },
           "play": {
             "name": "Play and tension loss (optional)",
             "description": "Set how much you play this racket to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
@@ -235,7 +272,8 @@
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
       "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
       "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
-      "setup_incomplete": "The usual setup needs at least a main string and a main tension."
+      "setup_incomplete": "The usual setup needs at least a main string and a main tension.",
+      "current_incomplete": "The current strings need at least a main string and a main tension."
     }
   },
   "selector": {

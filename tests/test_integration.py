@@ -277,3 +277,87 @@ async def test_no_recorder(hass: HomeAssistant) -> None:
         blocking=True,
     )
     await async_backfill(hass, hass.config_entries.async_get_entry(entry_id))
+
+
+async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
+    """The add and options forms save the strings on the racket now."""
+    assert await async_setup_component(hass, "http", {})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    # A main string without a tension is not enough
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Blade",
+            "tension_unit": "lbs",
+            "current": {"main_string": "RPM Blast 1.25"},
+        },
+    )
+    assert result["errors"] == {"base": "current_incomplete"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Blade",
+            "tension_unit": "lbs",
+            "current": {
+                "main_string": "RPM Blast 1.25",
+                "main_tension": 52.0,
+                "date": "2026-10-01",
+            },
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    entry = result["result"]
+    assert entry.data == {}
+    [record] = entry.runtime_data.restrings
+    assert record["date"] == "2026-10-01"
+    assert record["main_tension"] == 52 and record["cross_tension"] == 52
+    assert record["cross_string"] == "RPM Blast 1.25"
+    assert hass.states.get("sensor.blade_restrings").state == "1"
+
+    async def configure(current: dict) -> None:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        suggested = {
+            str(key): key.description["suggested_value"]
+            for key in result["data_schema"].schema
+            if key == "current"
+        }
+        assert (
+            suggested["current"]["main_string"]
+            == entry.runtime_data.latest["main_string"]
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tension_unit": "lbs", "current": current}
+        )
+        assert result["type"] == "create_entry"
+        await hass.async_block_till_done()
+
+    # Same date as the latest restring: corrects it
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-01"}
+    )
+    [record] = entry.runtime_data.restrings
+    assert record["main_tension"] == 53 and record["cross_tension"] == 53
+
+    # Unchanged: nothing happens
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-01"}
+    )
+    assert entry.runtime_data.count == 1
+
+    # Another date: a new restring
+    await configure(
+        {
+            "main_string": "Hyper-G 1.25",
+            "main_tension": 50,
+            "cross_string": "Velocity 1.30",
+            "cross_tension": 52.5,
+            "date": "2026-11-10",
+        }
+    )
+    latest = entry.runtime_data.latest
+    assert entry.runtime_data.count == 2
+    assert latest["date"] == "2026-11-10" and latest["cross_tension"] == 52.5
+    assert latest["tension_unit"] == "lbs"

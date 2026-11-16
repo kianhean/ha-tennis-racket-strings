@@ -43,6 +43,7 @@ from .const import (
     ATTR_REMOVE_IMAGE,
     ATTR_RESTRING_ID,
     ATTR_STRINGER,
+    CONF_CURRENT,
     CONF_SETUP,
     CONF_TENSION_UNIT,
     DOMAIN,
@@ -275,7 +276,9 @@ async def async_log_restring(
     # Full bed of one string unless a hybrid is specified
     data.setdefault(ATTR_CROSS_STRING, data[ATTR_MAIN_STRING])
     data.setdefault(ATTR_CROSS_TENSION, data[ATTR_MAIN_TENSION])
-    data["tension_unit"] = entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
+    data.setdefault(
+        "tension_unit", entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
+    )
     data = _serialize(data)
     _check_broken_date(data)
 
@@ -286,6 +289,37 @@ async def async_log_restring(
         {"config_entry_id": entry.entry_id, "racket": entry.title, **record},
     )
     return record
+
+
+async def async_set_current_strings(
+    hass: HomeAssistant,
+    entry: RacketConfigEntry,
+    current: dict[str, Any],
+    tension_unit: str | None = None,
+) -> dict[str, Any] | None:
+    """Save the strings on the racket now (the forms' Current strings section).
+
+    On the latest restring's date it edits that restring; on any other date (today
+    if empty) it logs a new one. Returns the changed record, or None if unchanged.
+    """
+    fields: dict[str, Any] = {
+        k: _whole(float(v)) if k in (ATTR_MAIN_TENSION, ATTR_CROSS_TENSION) else v
+        for k, v in current.items()
+        if v not in (None, "")
+    }
+    fields[ATTR_DATE] = str(fields.get(ATTR_DATE) or dt_util.now().date())
+    fields.setdefault(ATTR_CROSS_STRING, fields[ATTR_MAIN_STRING])
+    fields.setdefault(ATTR_CROSS_TENSION, fields[ATTR_MAIN_TENSION])
+    history = entry.runtime_data
+    if (latest := history.latest) is not None and latest.get(ATTR_DATE) == fields[
+        ATTR_DATE
+    ]:
+        if not (changes := {k: v for k, v in fields.items() if latest.get(k) != v}):
+            return None
+        return await history.async_update(latest["id"], changes)
+    if tension_unit:
+        fields["tension_unit"] = tension_unit
+    return await async_log_restring(hass, entry, fields)
 
 
 async def async_mark_broken(
@@ -591,6 +625,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
     history = RacketHistory(hass, entry.entry_id)
     await history.async_load()
     entry.runtime_data = history
+
+    # Current strings entered when the racket was added
+    if current := entry.data.get(CONF_CURRENT):
+        await async_set_current_strings(hass, entry, current)
+        hass.config_entries.async_update_entry(entry, data={})
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     loaded = _options_needing_reload(entry)

@@ -76,6 +76,8 @@ def test_every_blueprint_is_tested() -> None:
     tested = {
         "restring_reminder.yaml",
         "restring_due.yaml",
+        "racket_picker.yaml",
+        "racket_picker.yaml",
         "restring_logged.yaml",
         "rate_strings.yaml",
     }
@@ -198,3 +200,46 @@ async def test_rate_strings(hass: HomeAssistant, notify_calls) -> None:
     await hass.async_block_till_done()
     assert len(notify_calls) == 1
     assert "Rate RPM Blast on Pure Aero" in notify_calls[0].data["message"]
+
+
+async def test_racket_picker(hass: HomeAssistant, notify_calls) -> None:
+    from homeassistant import config_entries
+
+    assert await async_setup_component(
+        hass, "input_select", {"input_select": {"racket": {"options": ["—"]}}}
+    )
+    first = await _add_racket(hass)
+    await _automation(hass, "racket_picker.yaml", {"picker": "input_select.racket"})
+
+    async def add(name: str) -> str:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"name": name, "tension_unit": "lbs"}
+        )
+        await hass.async_block_till_done()
+        return result["result"].entry_id
+
+    def options() -> list[str]:
+        return hass.states.get("input_select.racket").attributes["options"]
+
+    # Adding a racket fills the dropdown with every racket, sorted
+    blade = await add("Blade")
+    assert options() == ["Blade", "Pure Aero"]
+
+    # Renaming follows
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": first},
+    )
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Match racket"}
+    )
+    await hass.async_block_till_done()
+    assert options() == ["Blade", "Match racket"]
+
+    # Removing one drops it
+    await hass.config_entries.async_remove(blade)
+    await hass.async_block_till_done()
+    assert options() == ["Match racket"]

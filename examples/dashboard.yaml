@@ -174,7 +174,7 @@ sections:
           {{ ' | ' }}{{ r.date -}}
           {{ ' | ' }}{{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif -%}
           {{ ' | ' }}{{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit -}}
-          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is not none else '' -}}
+          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is defined and r.cost is not none else '' -}}
           {{ ' | ' }}{{ '⭐' * r.rating if r.rating else '' -}}
           {{ ' | ' }}{{ (r.notes or '') | replace('\n', ' ') | replace('|', '/') }} |
           {% endfor -%}

@@ -302,6 +302,7 @@ drop-down. For the notify action, enter your phone's, for example `notify.mobile
 | 🔔 **Restring due** | Notify when a racket's [Restring due](#restring-due) sensor turns on, and say why | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_due.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_due.yaml blueprint"></a> |
 | ⏳ **Restring reminder** | Notify when a racket's strings reach an age you choose (no rules needed) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_reminder.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_reminder.yaml blueprint"></a> |
 | 📸 **Restring logged** | A notification, with the photo, every time a restring is logged (one racket or all) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_logged.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_logged.yaml blueprint"></a> |
+| 🎾 **Racket picker** | Keep a dropdown helper filled with your rackets, for the [multi-racket dashboard](#several-rackets-pick-one-from-a-dropdown) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fracket_picker.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the racket_picker.yaml blueprint"></a> |
 | ⭐ **Rate your strings** | A few days after a restring, remind you to rate it if you haven't | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frate_strings.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the rate_strings.yaml blueprint"></a> |
 
 The blueprints live in [`blueprints/automation/racket_tracker/`](blueprints/automation/racket_tracker)
@@ -364,6 +365,31 @@ Home Assistant's built-in cards:
 
 A test checks that every entity it uses exists. The screenshot at the top is this view in Home
 Assistant 2026.9 with example data (the photos are placeholders).
+
+### Several rackets: pick one from a dropdown
+
+[`examples/dashboard_multi.yaml`](examples/dashboard_multi.yaml) is one view for all your rackets.
+Pick a racket in the dropdown and the photo, current setup, estimate, next restring and history
+follow it. Below that, an **All rackets** table lists every racket with its age, tension and
+whether it's due, and a graph shows every racket's estimated tension.
+
+1. **Settings → Devices & services → Helpers → Create helper → Dropdown**, name it `Racket`
+   (so it's `input_select.racket`) and give it any one option.
+2. Import the [Racket picker blueprint](#one-click-blueprints) and create an automation from it with
+   that dropdown. It fills in your rackets and keeps them up to date as you add, rename or delete one.
+3. Add the scripts from [`examples/scripts.yaml`](examples/scripts.yaml) (**Usual setup** uses
+   `restring_selected_racket`), then paste the view like the one above.
+
+New rackets show up in the dropdown and the table by themselves. Only the graph lists rackets by
+name, because Home Assistant's graph cards can't follow a dropdown: add a line for each racket.
+Tests render every card with two rackets.
+
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/dashboard-multi-dark.png">
+  <img src="images/screenshots/dashboard-multi-light.png" alt="The multi-racket view: a Racket dropdown set to Pure Aero with its photo, strings, estimate and next restring; an All rackets table showing Blade due; a graph of both rackets' estimated tension; and Pure Aero's restring history" width="800">
+</picture>
+</p>
 
 A minimal history card:
 

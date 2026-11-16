@@ -1,0 +1,176 @@
+# A dashboard view for all your rackets: pick one in the dropdown and the cards follow it.
+# Needs:
+#   1. A Dropdown helper named "Racket" (input_select.racket): Settings → Devices & services →
+#      Helpers → Create helper → Dropdown, with any one option.
+#   2. An automation from the "Racket picker" blueprint pointing at it (fills in the rackets).
+#   3. The scripts from examples/scripts.yaml.
+# Then paste this under `views:` like dashboard.yaml. Nothing here names a racket except the
+# graph: built-in graphs can't follow the dropdown, so it lists every racket (one line each).
+#
+# The cards find the picked racket by its Strings sensor (sensor.<racket>_strings) and use
+# the same <racket> prefix for its other entities.
+
+title: All rackets
+path: all-rackets
+icon: mdi:tennis
+type: sections
+max_columns: 3
+sections:
+  # ── Picked racket ────────────────────────────────────────────────
+  - type: grid
+    cards:
+      - type: heading
+        heading: Racket
+        icon: mdi:tennis
+      - type: tile
+        entity: input_select.racket
+        name: Racket
+        hide_state: true
+        features:
+          - type: select-options
+        grid_options: { columns: full }
+      - type: markdown
+        grid_options: { columns: full }
+        content: |
+          {% set name = states('input_select.racket') -%}
+          {% set ns = namespace(s=none) -%}
+          {% for e in integration_entities('racket_tracker') | select('match', '^sensor[.].*_strings$') -%}
+          {% if (device_attr(e, 'name_by_user') or device_attr(e, 'name')) == name %}{% set ns.s = e %}{% endif -%}
+          {% endfor -%}
+          {% if ns.s is none -%}
+          Pick a racket above.
+          {%- else -%}
+          {% set p = ns.s[7:-8] -%}
+          {% set a = states[ns.s].attributes -%}
+          {% set unit = state_attr('sensor.' ~ p ~ '_tension', 'unit_of_measurement') -%}
+          {% set hist = state_attr('sensor.' ~ p ~ '_restrings', 'history') or [] -%}
+          {% set photos = hist | selectattr('image_url') | list -%}
+          {% if photos %}<img src="{{ photos[0].image_url }}" width="100%">
+
+          {% endif -%}
+          {% if a.main_string is not defined -%}
+          No restrings logged yet.
+          {%- else -%}
+          **{{ states(ns.s) }}** @ {{ a.main_tension }}{% if a.cross_tension != a.main_tension %}/{{ a.cross_tension }}{% endif %} {{ unit }}
+
+          Strung {{ a.date }} ({{ states('sensor.' ~ p ~ '_days_since_restring') }} days ago){% if a.stringer %} by {{ a.stringer }}{% endif %}
+
+          {% if a.rating %}{{ '⭐' * a.rating }}{% else %}_Not rated yet_{% endif %}{% if a.notes %} · {{ a.notes }}{% endif %}
+
+          {% set est = states('sensor.' ~ p ~ '_estimated_tension') -%}
+          {% if est | is_number -%}
+          Estimated now: **{{ est }} {{ unit }}** ({{ states('sensor.' ~ p ~ '_estimated_tension_loss') | float | round(0) | int }} % lost, {{ states('sensor.' ~ p ~ '_hours_played') }} h played)
+
+          {% endif -%}
+          {% set next = states('sensor.' ~ p ~ '_next_restring') -%}
+          {% if is_state('binary_sensor.' ~ p ~ '_restring_due', 'on') -%}
+          ⚠️ **Restring due** (since {{ next }})
+          {%- elif next not in ['unknown', 'unavailable'] -%}
+          Next restring: {{ next }}
+          {%- endif %}
+
+          {{ states('sensor.' ~ p ~ '_restrings') }} restrings · {{ states('sensor.' ~ p ~ '_total_string_cost') | float | round(0) | int }} {{ state_attr('sensor.' ~ p ~ '_total_string_cost', 'unit_of_measurement') }} spent
+          {%- endif %}
+          {%- endif %}
+      - type: button
+        name: Log restring
+        icon: mdi:plus-circle
+        tap_action:
+          action: more-info
+        entity: script.log_restring
+        grid_options: { columns: 4, rows: 2 }
+      # Logs the picked racket's usual setup for today
+      - type: button
+        name: Usual setup
+        icon: mdi:repeat
+        entity: script.restring_selected_racket
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: script.restring_selected_racket
+          confirmation:
+            text: Log a restring with the usual setup for today?
+        grid_options: { columns: 4, rows: 2 }
+      - type: button
+        name: Rate strings
+        icon: mdi:star
+        tap_action:
+          action: more-info
+        entity: script.rate_current_strings
+        grid_options: { columns: 4, rows: 2 }
+
+  # ── Every racket ─────────────────────────────────────────────────
+  - type: grid
+    column_span: 2
+    cards:
+      - type: heading
+        heading: All rackets
+        grid_options: { columns: full }
+      - type: markdown
+        grid_options: { columns: full }
+        content: |
+          {% set ns = namespace(rows=[]) -%}
+          {% for e in integration_entities('racket_tracker') | select('match', '^sensor[.].*_strings$') -%}
+          {% set ns.rows = ns.rows + [{'name': device_attr(e, 'name_by_user') or device_attr(e, 'name'), 'e': e}] -%}
+          {% endfor -%}
+          {% if not ns.rows -%}
+          No rackets yet.
+          {%- else -%}
+          | Racket | Strings | Age | Strung | Est. now | Next restring |
+          |---|---|--:|--:|--:|---|
+          {% for r in ns.rows | sort(attribute='name') -%}
+          {% set p = r.e[7:-8] -%}
+          {% set unit = state_attr('sensor.' ~ p ~ '_tension', 'unit_of_measurement') or '' -%}
+          {% set est = states('sensor.' ~ p ~ '_estimated_tension') -%}
+          {% set next = states('sensor.' ~ p ~ '_next_restring') -%}
+          | **{{ r.name }}** | {{ states(r.e) if states(r.e) not in ['unknown', 'unavailable'] else '—' -}}
+          {{ ' | ' }}{{ states('sensor.' ~ p ~ '_days_since_restring') ~ ' d' if states('sensor.' ~ p ~ '_days_since_restring') | is_number else '—' -}}
+          {{ ' | ' }}{{ states('sensor.' ~ p ~ '_tension') ~ ' ' ~ unit if states('sensor.' ~ p ~ '_tension') | is_number else '—' -}}
+          {{ ' | ' }}{{ est ~ ' ' ~ unit if est | is_number else '—' -}}
+          {{ ' | ' }}{{ '⚠️ **Due**' if is_state('binary_sensor.' ~ p ~ '_restring_due', 'on') else (next if next not in ['unknown', 'unavailable'] else '—') }} |
+          {% endfor -%}
+          {% endif %}
+      # Built-in graphs can't follow the dropdown: add one line per racket.
+      - type: history-graph
+        title: Estimated tension
+        hours_to_show: 2160
+        grid_options: { columns: full }
+        entities:
+          - entity: sensor.pure_aero_estimated_tension
+            name: Pure Aero
+          - entity: sensor.blade_estimated_tension
+            name: Blade
+
+  # ── Picked racket's history ──────────────────────────────────────
+  - type: grid
+    column_span: 3
+    cards:
+      - type: heading
+        heading: Restring history
+        grid_options: { columns: full }
+      - type: markdown
+        grid_options: { columns: full }
+        content: |
+          {% set name = states('input_select.racket') -%}
+          {% set ns = namespace(s=none) -%}
+          {% for e in integration_entities('racket_tracker') | select('match', '^sensor[.].*_strings$') -%}
+          {% if (device_attr(e, 'name_by_user') or device_attr(e, 'name')) == name %}{% set ns.s = e %}{% endif -%}
+          {% endfor -%}
+          {% set p = ns.s[7:-8] if ns.s else '' -%}
+          {% set history = state_attr('sensor.' ~ p ~ '_restrings', 'history') or [] -%}
+          {% set cur = state_attr('sensor.' ~ p ~ '_total_string_cost', 'unit_of_measurement') -%}
+          {% if history | count == 0 -%}
+          No restrings logged yet.
+          {%- else -%}
+          | Photo | Date | Strings | Tension | Cost | Rating | Notes |
+          |:-:|---|---|---|--:|---|---|
+          {% for r in history -%}
+          | {% if r.image_url %}<a href="{{ r.image_url }}" target="_blank"><img src="{{ r.image_url }}" width="72"></a>{% endif -%}
+          {{ ' | ' }}{{ r.date -}}
+          {{ ' | ' }}{{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif -%}
+          {{ ' | ' }}{{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit -}}
+          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is defined and r.cost is not none else '' -}}
+          {{ ' | ' }}{{ '⭐' * r.rating if r.rating else '' -}}
+          {{ ' | ' }}{{ (r.notes or '') | replace('\n', ' ') | replace('|', '/') }} |
+          {% endfor -%}
+          {% endif %}

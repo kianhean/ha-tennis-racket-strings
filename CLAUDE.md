@@ -29,10 +29,10 @@ custom_components/racket_tracker/
 ├── quality_scale.yaml # Self-assessment; keep it honest
 └── brand/             # icon/logo PNGs loaded by HA 2026.3+ and checked by hacs/action. Do not delete.
 
-blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings
-examples/              # scripts.yaml (form UI), dashboard.yaml (built-in cards only)
-images/brand/*.svg     # Sources for brand/*.png (render with rsvg-convert, trim with ImageMagick)
-images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml (light + dark)
+blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings, racket_picker
+examples/              # scripts.yaml (form UI), dashboard.yaml (one racket), dashboard_multi.yaml (dropdown: input_select.racket + racket_picker blueprint; cards find the racket by sensor.<racket>_strings). Built-in cards only
+images/brand/          # strung-logo.jpg (the logo) → make_brand.py → brand/*.png (no tagline; light logo recolours white to navy)
+images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml and dashboard_multi.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
 ```
 

@@ -1,0 +1,61 @@
+blueprint:
+  name: Racket – racket picker
+  description: >-
+    Keep a dropdown helper (input_select) filled with your rackets, for the
+    multi-racket dashboard in examples/dashboard_multi.yaml. Updates when
+    Home Assistant starts, when this automation is saved, and whenever a
+    racket is added, removed or renamed.
+  domain: automation
+  author: Strung
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/racket_picker.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    picker:
+      name: Racket dropdown
+      description: >-
+        A Dropdown helper (Settings → Devices & services → Helpers → Create
+        helper → Dropdown) with any one option; this fills in the rest.
+      selector:
+        entity:
+          filter:
+            - domain: input_select
+
+mode: queued
+max_exceeded: silent
+
+triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
+  # A racket added or removed creates or removes its entities
+  - trigger: event
+    event_type: entity_registry_updated
+  # A racket renamed (Reconfigure, or the device name)
+  - trigger: event
+    event_type: device_registry_updated
+
+variables:
+  picker: !input picker
+  # Racket names, from each racket's Strings sensor (sensor.<racket>_strings)
+  rackets: >-
+    {% set ns = namespace(names=[]) %}
+    {% for e in integration_entities('racket_tracker')
+         | select('match', '^sensor[.].*_strings$') %}
+      {% set name = device_attr(e, 'name_by_user') or device_attr(e, 'name') %}
+      {% if name and name not in ns.names %}{% set ns.names = ns.names + [name] %}{% endif %}
+    {% endfor %}
+    {{ ns.names | sort }}
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ rackets | count > 0 and rackets != state_attr(picker, 'options') }}
+
+actions:
+  - action: input_select.set_options
+    target:
+      entity_id: "{{ picker }}"
+    data:
+      options: "{{ rackets }}"

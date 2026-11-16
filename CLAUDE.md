@@ -131,3 +131,6 @@ makes `release.yml` tag `v<version>`, create the GitHub release and attach `rack
 - Platforms use `AddConfigEntryEntitiesCallback`.
 - User-facing errors are `ServiceValidationError` with translation keys under `exceptions`.
 - README images and examples must show only what HA really renders from built-in cards.
+- Cite Tennis Warehouse / TWU as plain text, never as links: their terms of use forbid linking
+  without written permission, and copying or data mining their content. Don't bundle or fetch TWU data;
+  users type values in (`twu_tension_loss`).

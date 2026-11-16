@@ -250,7 +250,7 @@ Without a string type, the current main string's material from the
 `string_type_source` attribute says which (`racket`, `string` or `default`).
 
 **Your string's own tension loss.** Tennis Warehouse University's
-[String Performance Database](https://twu.tennis-warehouse.com/learning_center/reporter2.php) lists a
+String Performance Database (on its website) lists a
 measured **Tension Loss (%)** for hundreds of strings. Enter your usual main string's value as
 **String's tension loss in the TWU database** and the string type's rates are scaled by how it
 compares with the median for that type (polyester 41 %, nylon 21 %, gut 15 %): a polyester at
@@ -293,7 +293,7 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
   gives that shape. The 3 % first-hour default gives about 9.5 % after 8 hours.
 - **Materials.** "Natural gut has one of the lowest rates of tension loss … while all polyester
   strings lose tension rapidly" (Cross et al. 2000). "Polyester loses more than nylon which loses
-  more than gut" ([Lindsey, TWU 2013](https://twu.tennis-warehouse.com/learning_center/deadstrings.php)).
+  more than gut" (Lindsey, "How Tennis Strings Go Dead", Tennis Warehouse University, 2013).
   The nylon and gut rates scale polyester's by roughly the ratio of the median losses in
   Tennis Warehouse University's string database: polyester 41 %, nylon 21 %, gut 15 %
   ([summary](https://thetennisindex.com/guides/compendium/string-types)).
@@ -305,8 +305,8 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
 **Limits.** These are averages from a few lab strings, not your string in your climate; play
 intensity and temperature matter too. And tension isn't the whole story: strings feel "dead"
 mostly because the stringbed gets softer and the strings stop sliding back, not because of
-tension loss ([Lindsey, TWU 2013](https://twu.tennis-warehouse.com/learning_center/deadstrings.php);
-[part 2](https://twu.tennis-warehouse.com/learning_center/deadstringsPart2.php)). For polyester, a
+tension loss (Lindsey, "How Tennis Strings Go Dead", parts 1 and 2, Tennis Warehouse University,
+2013). For polyester, a
 [restring rule](#restring-due) on days or hours of play is often a better trigger than a tension
 threshold.
 

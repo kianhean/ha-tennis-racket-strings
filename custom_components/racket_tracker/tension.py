@@ -36,8 +36,7 @@ Where the shape and the numbers come from:
   median losses in TWU's string database (polyester 41 %, nylon 21 %,
   gut 15 %).
 - A string's own measured tension loss can replace the median: TWU's String
-  Performance Database (twu.tennis-warehouse.com/learning_center/reporter2.php)
-  lists a "Tension Loss (%)" per string from the same impact test. When it is
+  Performance Database (Tennis Warehouse University website) lists a "Tension Loss (%)" per string from the same impact test. When it is
   set (twu_tension_loss), the string type's rates are scaled by that value over
   the type's median, e.g. a polyester measured at 30 % loses 30/41 of the
   polyester defaults. Rates entered by hand, or set by calibrate_tension, win.

@@ -1,8 +1,8 @@
 """Repair issues for rackets linked to the Racqix dataset.
 
-When a racket with looked-up specs is set up, its dataset entry is checked
-(using the day-long cache in dataset.py, so a restart with several rackets
-fetches the list at most once):
+When a racket with looked-up specs is set up, its dataset entry is fetched on
+its own (dataset.async_get_racquet: that racket only, kept for a day; never the
+whole list) and compared:
 
 - dataset_unreachable: the list couldn't be fetched. Nothing breaks: the
   specs are kept in the racket's options. Removed once a check succeeds.
@@ -31,7 +31,7 @@ from .const import DOMAIN
 from .dataset import (
     CONF_DATASET_RACKET,
     DatasetError,
-    async_get_dataset,
+    async_get_racquet,
     dataset_specs,
     label,
 )
@@ -90,7 +90,7 @@ async def async_check_dataset(hass: HomeAssistant, entry: ConfigEntry) -> None:
         if failed is not None and dt_util.utcnow() - failed < _RETRY:
             return
         try:
-            dataset = await async_get_dataset(hass)
+            racquet = await async_get_racquet(hass, str(linked.get("slug")))
         except DatasetError:
             state["failed"] = dt_util.utcnow()
             ir.async_create_issue(
@@ -106,9 +106,6 @@ async def async_check_dataset(hass: HomeAssistant, entry: ConfigEntry) -> None:
         state["failed"] = None
         ir.async_delete_issue(hass, DOMAIN, ISSUE_UNREACHABLE)
 
-    racquet = next(
-        (r for r in dataset.racquets if r["slug"] == linked.get("slug")), None
-    )
     missing_id = _issue_id(ISSUE_MISSING, entry.entry_id)
     changed_id = _issue_id(ISSUE_CHANGED, entry.entry_id)
     if racquet is None:
@@ -150,7 +147,7 @@ async def async_check_dataset(hass: HomeAssistant, entry: ConfigEntry) -> None:
             "entry_id": entry.entry_id,
             "specs": json.dumps(new),
             "name": label(racquet),
-            "version": dataset.version,
+            "version": linked.get("version", ""),
         },
     )
 

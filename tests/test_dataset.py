@@ -12,6 +12,7 @@ from custom_components.racket_tracker.const import DOMAIN
 from custom_components.racket_tracker.dataset import (
     ATTRIBUTION,
     DATASET_URL,
+    RACQUET_URL,
     Dataset,
     dataset_specs,
     label,
@@ -88,6 +89,28 @@ def test_search_and_label() -> None:
     assert dataset_specs(RACQUETS[2]) == {"unstrung_weight": 305, "stiffness": 62}
 
 
+def _mock_api(aioclient_mock: AiohttpClientMocker) -> None:
+    """The list, and each racket on its own (what the repairs check asks for)."""
+    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    detail = {
+        "weight": "specs_weight_unstrung_g",
+        "balance_mm": "specs_balance_unstrung_mm",
+        "swingweight": "advanced_swingweight",
+        "ra": "specs_stiffness_ra",
+        "head_size": "specs_head_size_in",
+        "string_pattern": "specs_string_pattern",
+    }
+    for racquet in RACQUETS:
+        aioclient_mock.get(
+            RACQUET_URL.format(slug=racquet["slug"]),
+            json={detail.get(k, k): v for k, v in racquet.items()},
+        )
+
+
+def _list_calls(aioclient_mock: AiohttpClientMocker) -> int:
+    return sum(str(url) == DATASET_URL for _, url, *_ in aioclient_mock.mock_calls)
+
+
 async def _start(hass: HomeAssistant, **extra) -> dict:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -100,7 +123,7 @@ async def _start(hass: HomeAssistant, **extra) -> dict:
 async def test_lookup_fills_specs(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    _mock_api(aioclient_mock)
     result = await _start(
         hass, lookup="pure aero", model="Pure Aero 2023", specs={"balance": 322}
     )
@@ -131,7 +154,7 @@ async def test_lookup_fills_specs(
     # The list is cached: a second lookup doesn't fetch again
     result = await _start(hass, lookup="blade")
     assert result["step_id"] == "pick"
-    assert aioclient_mock.call_count == 1
+    assert _list_calls(aioclient_mock) == 1
 
 
 async def test_lookup_skip_no_match_and_offline(
@@ -143,7 +166,7 @@ async def test_lookup_skip_no_match_and_offline(
     assert result["errors"] == {"lookup": "cannot_connect"}
 
     aioclient_mock.clear_requests()
-    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    _mock_api(aioclient_mock)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"name": "Aero", "tension_unit": "lbs", "lookup": "zzz"}
     )
@@ -161,7 +184,7 @@ async def test_lookup_skip_no_match_and_offline(
 async def test_options_lookup_and_unlink(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    _mock_api(aioclient_mock)
     result = await _start(hass)
     await hass.async_block_till_done()
     entry = result["result"]

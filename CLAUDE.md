@@ -12,7 +12,7 @@ custom_components/racket_tracker/
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
-├── repairs.py         # On entry setup: linked racket vs dataset → issues (specs changed / missing: fix flows; unreachable: warning, retry after 1 h)
+├── repairs.py         # On entry setup: linked racket (async_get_racquet: /api/racquets/<slug>, ~6 kB, 404 = removed; never the list) → issues (specs changed / missing: fix flows; unreachable: warning, retry after 1 h)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
 ├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
 ├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served) and import (parse_csv: validate all rows, skip duplicates)
@@ -75,9 +75,10 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
 - `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,
   `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
   button use it, else the latest restring. All logging goes through `async_log_restring()`.
-- The dataset (`https://www.racqix.com/api/racquets?mode=minimal`) is the integration's only
-  network request (lookups, and the repairs check when a linked racket is set up); tests mock it
-  with `aioclient_mock`.
+- Racqix is the integration's only network host. The list (`/api/racquets?mode=minimal`, ~1 MB;
+  the API ignores search/filter params) is fetched only when someone searches. The repairs check
+  asks for one linked racket (`/api/racquets/<slug>`: other field names, numbers as text; mapped by
+  `_DETAIL_FIELDS`). Tests mock both with `aioclient_mock` (`_mock_api` in test_dataset.py).
 - String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring
   descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
   main/cross string: used strings first, then the catalog. Runs on setup and history changes.

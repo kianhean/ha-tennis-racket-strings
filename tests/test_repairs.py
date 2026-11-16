@@ -12,10 +12,30 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 )
 
 from custom_components.racket_tracker.const import DOMAIN
-from custom_components.racket_tracker.dataset import DATASET_URL
+from custom_components.racket_tracker.dataset import DATASET_URL, RACQUET_URL
 from custom_components.racket_tracker.repairs import describe_changes
 
-from .test_dataset import PAYLOAD, PURE_AERO_2023
+URL = RACQUET_URL.format(slug="babolat-pure-aero-2023")
+
+
+def _detail(**changes: str) -> dict:
+    """The single-racket API's answer: other field names, numbers as text."""
+    return {
+        "slug": "babolat-pure-aero-2023",
+        "brand": "Babolat",
+        "model": "Pure Aero",
+        "year": "2023",
+        "specs_weight_unstrung_g": "300",
+        "specs_balance_unstrung_mm": "320",
+        "advanced_swingweight": "320",
+        "specs_stiffness_ra": "68",
+        "specs_head_size_in": "100",
+        "specs_string_pattern": "16x19",
+        "scores_spin": "100",
+        "updated_at\r": "2025-12-23\r",  # sic
+        **changes,
+    }
+
 
 LINKED = {
     "tension_unit": "lbs",
@@ -71,22 +91,20 @@ def test_describe_changes() -> None:
 async def test_up_to_date_racket_has_no_issue(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    aioclient_mock.get(URL, json=_detail())
     await _setup(hass, LINKED)
     assert not ir.async_get(hass).issues
     # Not linked: no request at all
     await _setup(hass, {"tension_unit": "lbs"})
     assert aioclient_mock.call_count == 1
+    # Only that racket was asked for, never the whole list
+    assert all(str(url) != DATASET_URL for _, url, *_ in aioclient_mock.mock_calls)
 
 
 async def test_specs_changed(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_client
 ) -> None:
-    changed = {**PURE_AERO_2023, "ra": 66}
-    aioclient_mock.get(
-        DATASET_URL,
-        json={**PAYLOAD, "dataset_version": "2026.2", "racquets": [changed]},
-    )
+    aioclient_mock.get(URL, json=_detail(specs_stiffness_ra="66"))
     entry = await _setup(hass, {**LINKED, "specs": {"stiffness": 70}})
     issue_id = f"dataset_specs_changed_{entry.entry_id}"
     issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
@@ -96,7 +114,6 @@ async def test_specs_changed(
     flow = await _fix(hass, hass_client, issue_id)
     assert "68 RA → 66 RA" in flow["description_placeholders"]["changes"]
     assert entry.options["dataset_specs"]["stiffness"] == 66
-    assert entry.options["dataset_racket"]["version"] == "2026.2"
     assert entry.options["specs"] == {"stiffness": 70}  # measured still wins
     assert float(hass.states.get("sensor.aero_stiffness").state) == 70
     assert float(hass.states.get("sensor.aero_balance").state) == 320
@@ -107,7 +124,7 @@ async def test_specs_changed(
 async def test_racket_missing(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_client
 ) -> None:
-    aioclient_mock.get(DATASET_URL, json={**PAYLOAD, "racquets": []})
+    aioclient_mock.get(URL, status=404, json={"error": "Racquet not found"})
     entry = await _setup(hass, LINKED)
     issue_id = f"dataset_racket_missing_{entry.entry_id}"
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
@@ -125,7 +142,7 @@ async def test_racket_missing(
 async def test_removing_racket_removes_its_issues(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(DATASET_URL, json={**PAYLOAD, "racquets": []})
+    aioclient_mock.get(URL, status=404, json={"error": "Racquet not found"})
     entry = await _setup(hass, LINKED)
     assert ir.async_get(hass).issues
     await hass.config_entries.async_remove(entry.entry_id)
@@ -137,7 +154,7 @@ async def test_unreachable(
     aioclient_mock: AiohttpClientMocker,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    aioclient_mock.get(DATASET_URL, status=503)
+    aioclient_mock.get(URL, status=503)
     entry = await _setup(hass, LINKED)
     assert ir.async_get(hass).async_get_issue(DOMAIN, "dataset_unreachable")
     # Specs keep working
@@ -151,7 +168,7 @@ async def test_unreachable(
     # Later, it's back
     freezer.tick(3700)
     aioclient_mock.clear_requests()
-    aioclient_mock.get(DATASET_URL, json=PAYLOAD)
+    aioclient_mock.get(URL, json=_detail())
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert aioclient_mock.call_count == 1

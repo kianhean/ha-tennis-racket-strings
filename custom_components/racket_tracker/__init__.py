@@ -83,9 +83,12 @@ from .tension import (
     CONF_INITIAL_LOSS,
     CONF_PLAY,
     CONF_RELAXATION_LOSS,
+    PRESET_MINOR_VERSION,
     calibrate,
     migrate_play_options,
+    move_old_presets,
     play_settings,
+    uses_old_presets,
 )
 
 PLATFORMS: list[Platform] = [
@@ -634,6 +637,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> 
         if play := options.get(CONF_PLAY):
             options[CONF_PLAY] = migrate_play_options(play)
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    if entry.minor_version < PRESET_MINOR_VERSION:
+        # 1.3: the nylon and gut presets were raised. A rate equal to an old
+        # preset was most likely typed in from the form's "Default: ..." help
+        # text, so it moves with the preset; any other rate, or a calibrated
+        # one, is the user's own and stays.
+        if uses_old_presets(play := entry.options.get(CONF_PLAY) or {}):
+            hass.config_entries.async_update_entry(
+                entry,
+                options={**entry.options, CONF_PLAY: move_old_presets(play)},
+                minor_version=PRESET_MINOR_VERSION,
+            )
+        else:
+            hass.config_entries.async_update_entry(
+                entry, minor_version=PRESET_MINOR_VERSION
+            )
     return True
 
 

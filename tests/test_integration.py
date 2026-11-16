@@ -277,3 +277,105 @@ async def test_no_recorder(hass: HomeAssistant) -> None:
         blocking=True,
     )
     await async_backfill(hass, hass.config_entries.async_get_entry(entry_id))
+
+
+async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
+    """The add and options forms save the strings on the racket now."""
+    assert await async_setup_component(hass, "http", {})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    # A main string without a tension is not enough
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Blade",
+            "tension_unit": "lbs",
+            "current": {"main_string": "RPM Blast 1.25"},
+        },
+    )
+    assert result["errors"] == {"base": "current_incomplete"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "name": "Blade",
+            "tension_unit": "lbs",
+            "current": {
+                "main_string": "RPM Blast 1.25",
+                "main_tension": 52.0,
+                "date": "2026-10-01",
+            },
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    entry = result["result"]
+    assert entry.data == {}
+    [record] = entry.runtime_data.restrings
+    assert record["date"] == "2026-10-01"
+    assert record["main_tension"] == 52 and record["cross_tension"] == 52
+    assert record["cross_string"] == "RPM Blast 1.25"
+    assert hass.states.get("sensor.blade_restrings").state == "1"
+
+    async def configure(current: dict, error: str | None = None) -> None:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        # The section is prefilled from the latest restring
+        current_section = result["data_schema"].schema["current"]
+        suggested = {
+            str(key): (key.description or {}).get("suggested_value")
+            for key in current_section.schema.schema
+        }
+        latest = entry.runtime_data.latest
+        assert suggested["main_string"] == latest["main_string"]
+        assert suggested["date"] == latest["date"]
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tension_unit": "lbs", "current": current}
+        )
+        if error:
+            assert result["errors"] == {"base": error}
+            return
+        assert result["type"] == "create_entry"
+        await hass.async_block_till_done()
+
+    # Same date as the latest restring: corrects it
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-01"}
+    )
+    [record] = entry.runtime_data.restrings
+    assert record["main_tension"] == 53 and record["cross_tension"] == 53
+
+    # Unchanged: nothing happens
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-01"}
+    )
+    assert entry.runtime_data.count == 1
+
+    # Only the date changed: moves the latest restring
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-09-20"}
+    )
+    [record] = entry.runtime_data.restrings
+    assert record["date"] == "2026-09-20" and record["main_tension"] == 53
+
+    # Not past the day the strings broke
+    await entry.runtime_data.async_update(record["id"], {"broken_date": "2026-10-05"})
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-10"},
+        "current_after_broken",
+    )
+    assert entry.runtime_data.latest["date"] == "2026-09-20"
+
+    # Strings and date changed: a new restring
+    await configure(
+        {
+            "main_string": "Hyper-G 1.25",
+            "main_tension": 50,
+            "cross_string": "Velocity 1.30",
+            "cross_tension": 52.5,
+            "date": "2026-11-10",
+        }
+    )
+    latest = entry.runtime_data.latest
+    assert entry.runtime_data.count == 2
+    assert latest["date"] == "2026-11-10" and latest["cross_tension"] == 52.5
+    assert latest["tension_unit"] == "lbs"

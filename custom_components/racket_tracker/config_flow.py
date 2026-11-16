@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -16,6 +17,7 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     BooleanSelector,
+    DateSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -26,14 +28,18 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 
+from . import async_set_current_strings, current_strings_change
 from .const import (
+    ATTR_BROKEN_DATE,
     ATTR_COST,
     ATTR_CROSS_STRING,
     ATTR_CROSS_TENSION,
+    ATTR_DATE,
     ATTR_MAIN_STRING,
     ATTR_MAIN_TENSION,
     ATTR_STRINGER,
     CONF_BRAND,
+    CONF_CURRENT,
     CONF_HEAD_SIZE,
     CONF_MODEL,
     CONF_SETUP,
@@ -184,10 +190,23 @@ SETUP_SCHEMA = vol.Schema(
     }
 )
 
-SECTIONS = (CONF_PLAY, CONF_DUE, CONF_SETUP)
+# The strings on the racket now: logged as a restring (or edit the latest one)
+CURRENT_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_MAIN_STRING): STRING_SELECTOR,
+        vol.Optional(ATTR_MAIN_TENSION): _number(1, 100, 0.5),
+        vol.Optional(ATTR_CROSS_STRING): STRING_SELECTOR,
+        vol.Optional(ATTR_CROSS_TENSION): _number(1, 100, 0.5),
+        vol.Optional(ATTR_DATE): DateSelector(),
+    }
+)
+CURRENT_FIELDS = tuple(str(key) for key in CURRENT_SCHEMA.schema)
+
+SECTIONS = (CONF_CURRENT, CONF_PLAY, CONF_DUE, CONF_SETUP)
 
 RACKET_DETAILS_SCHEMA = RACKET_DETAILS_SCHEMA.extend(
     {
+        vol.Optional(CONF_CURRENT): section(CURRENT_SCHEMA, {"collapsed": True}),
         vol.Optional(CONF_PLAY): section(PLAY_SCHEMA, {"collapsed": True}),
         vol.Optional(CONF_DUE): section(DUE_SCHEMA, {"collapsed": True}),
         vol.Optional(CONF_SETUP): section(SETUP_SCHEMA, {"collapsed": True}),
@@ -229,6 +248,11 @@ def _clean(user_input: dict[str, Any], errors: dict[str, str]) -> dict[str, Any]
     setup = data.get(CONF_SETUP) or {}
     if setup and not (setup.get(ATTR_MAIN_STRING) and setup.get(ATTR_MAIN_TENSION)):
         errors["base"] = "setup_incomplete"
+    current = data.get(CONF_CURRENT) or {}
+    if current and not (
+        current.get(ATTR_MAIN_STRING) and current.get(ATTR_MAIN_TENSION)
+    ):
+        errors["base"] = "current_incomplete"
     return data
 
 
@@ -302,6 +326,12 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
     MINOR_VERSION = 2
 
     _name: str
+    _current: dict[str, Any] | None
+
+    def _create(self, options: dict[str, Any]) -> ConfigFlowResult:
+        # The current strings are logged when the racket is set up
+        data = {CONF_CURRENT: self._current} if self._current else {}
+        return self.async_create_entry(title=self._name, data=data, options=options)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -315,9 +345,10 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
             if not name:
                 errors[CONF_NAME] = "name_required"
             if not errors:
+                self._current = data.pop(CONF_CURRENT, None)
                 self._name, self._options = name, data
                 if not query:
-                    return self.async_create_entry(title=name, data={}, options=data)
+                    return self._create(data)
                 if await self._async_lookup(query, errors):
                     return await self.async_step_pick()
 
@@ -333,8 +364,7 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
         """Pick the racket from the dataset matches (or none)."""
         if user_input is None:
             return self._pick_form("pick")
-        options = self._picked(user_input) or self._options
-        return self.async_create_entry(title=self._name, data={}, options=options)
+        return self._create(self._picked(user_input) or self._options)
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
@@ -364,6 +394,22 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
 class RacketOptionsFlow(_LookupMixin, OptionsFlow):
     """Edit racket details."""
 
+    _current: dict[str, Any] | None = None
+
+    @property
+    def _loaded(self) -> bool:
+        return self.config_entry.state is ConfigEntryState.LOADED
+
+    async def _async_save(self, options: dict[str, Any]) -> ConfigFlowResult:
+        if self._current and self._loaded:
+            await async_set_current_strings(
+                self.hass,
+                self.config_entry,
+                self._current,
+                options.get(CONF_TENSION_UNIT),
+            )
+        return self.async_create_entry(data=options)
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -375,6 +421,15 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
             data = _clean(user_input, errors)
             query = (data.pop(CONF_LOOKUP, None) or "").strip()
             keep = data.pop(CONF_USE_DATASET, True)
+            self._current = data.pop(CONF_CURRENT, None)
+            if not errors and self._current and self._loaded:
+                update, changes = current_strings_change(
+                    self.config_entry.runtime_data.latest, self._current
+                )
+                latest = self.config_entry.runtime_data.latest or {}
+                broken = latest.get(ATTR_BROKEN_DATE)
+                if update and broken and changes.get(ATTR_DATE, "") > broken:
+                    errors["base"] = "current_after_broken"
             if not errors:
                 # Keep dataset values unless unlinked; the user's own specs are
                 # layered on top.
@@ -384,11 +439,21 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
                             data[key] = value
                 self._options = data
                 if not query:
-                    return self.async_create_entry(data=data)
+                    return await self._async_save(data)
                 if await self._async_lookup(query, errors):
                     return await self.async_step_pick()
 
         schema = LOOKUP_SCHEMA.extend(RACKET_DETAILS_SCHEMA.schema)
+        suggested = dict(self.config_entry.options)
+        if not self._loaded:
+            # No history to log the current strings in
+            schema = vol.Schema(
+                {k: v for k, v in schema.schema.items() if k != CONF_CURRENT}
+            )
+        elif latest := self.config_entry.runtime_data.latest:
+            suggested[CONF_CURRENT] = {
+                k: latest[k] for k in CURRENT_FIELDS if latest.get(k) is not None
+            }
         if looked_up:
             schema = schema.extend(
                 {vol.Optional(CONF_USE_DATASET, default=True): BooleanSelector()}
@@ -396,7 +461,7 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                schema, user_input or self.config_entry.options
+                schema, user_input or suggested
             ),
             errors=errors,
             description_placeholders={
@@ -410,4 +475,4 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
         """Pick the racket from the dataset matches (or keep things as they are)."""
         if user_input is None:
             return self._pick_form("pick")
-        return self.async_create_entry(data=self._picked(user_input) or self._options)
+        return await self._async_save(self._picked(user_input) or self._options)

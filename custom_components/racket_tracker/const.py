@@ -15,6 +15,9 @@ CONF_TENSION_UNIT = "tension_unit"
 # The racket's usual setup (option section), used by repeat_restring
 CONF_SETUP = "setup"
 
+# The strings on the racket now (add/options form section, not stored as an option)
+CONF_CURRENT = "current"
+
 TENSION_UNIT_LBS = "lbs"
 TENSION_UNIT_KG = "kg"
 TENSION_UNITS = [TENSION_UNIT_LBS, TENSION_UNIT_KG]

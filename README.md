@@ -72,6 +72,7 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 | Head size | `98` sq in | |
 | String pattern | `16x20` | |
 | Tension unit | lbs or kg | Used for every tension on this racket: restrings, recommended range and estimates |
+| **Current strings** *(optional, collapsed)* | `RPM Blast` @ `52`, strung `2026-10-01` | Logged as the racket's first restring |
 | **Play and tension loss** *(optional, collapsed)* | `4` h/week | Turns on the [tension estimate](#estimated-tension) |
 | **Restring reminder** *(optional, collapsed)* | `60` days | Turns on [Restring due](#restring-due) |
 | **Usual setup** *(optional, collapsed)* | `RPM Blast` @ `52` | For [one-tap restrings](#usual-setup) |
@@ -79,6 +80,10 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 
 If you filled in **Look up**, the next step lists the matching rackets. Pick yours, or leave it empty
 to skip. Brand, model, head size and string pattern you left blank come from the dataset.
+
+Under **Configure**, **Current strings** shows the latest restring. Change only the date to move
+the latest restring, or only the strings and tensions to correct it. Change both to log a new
+restring.
 
 Repeat for each racket. To change the details or specs later, or to look the racket up later, click
 **Configure** on the racket. To rename it, use **⋮ → Reconfigure** (entity IDs keep their names).

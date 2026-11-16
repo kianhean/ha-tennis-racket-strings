@@ -297,6 +297,17 @@
         "name": "Photo"
       }
     },
+    "number": {
+      "usual_main_tension": {
+        "name": "Usual main tension"
+      },
+      "usual_cross_tension": {
+        "name": "Usual cross tension"
+      },
+      "usual_cost": {
+        "name": "Usual cost"
+      }
+    },
     "sensor": {
       "strings": {
         "name": "Strings"
@@ -404,6 +415,17 @@
           }
         }
       }
+    },
+    "text": {
+      "usual_main_string": {
+        "name": "Usual main string"
+      },
+      "usual_cross_string": {
+        "name": "Usual cross string"
+      },
+      "usual_stringer": {
+        "name": "Usual stringer"
+      }
     }
   },
   "exceptions": {
@@ -423,7 +445,7 @@
       "message": "Couldn't use that image: {reason}."
     },
     "no_setup": {
-      "message": "Racket {racket} has no usual setup and no restrings to repeat."
+      "message": "Racket {racket} has no usual setup and no restrings to repeat. Fill in its usual main string and main tension under Controls, then press again."
     },
     "no_play_settings": {
       "message": "Set hours of play per week for {racket} first (Configure \u2192 Play and tension loss)."

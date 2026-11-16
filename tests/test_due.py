@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant import config_entries
@@ -288,6 +289,92 @@ async def test_repeat_restring(hass: HomeAssistant) -> None:
             {"config_entry_id": entry_id, "restring_id": "nope"},
             blocking=True,
         )
+
+
+async def test_usual_setup_on_device_page(hass: HomeAssistant) -> None:
+    """Set the usual setup from the Controls card, then log it with the button."""
+    assert await async_setup_component(hass, "http", {})
+    hass.config.currency = "SGD"
+    entry_id = await _add_racket(hass)
+    entry = hass.config_entries.async_get_entry(entry_id)
+
+    main_string = "text.pure_aero_usual_main_string"
+    main_tension = "number.pure_aero_usual_main_tension"
+    assert hass.states.get(main_string).state == ""
+    assert hass.states.get(main_tension).state == "unknown"
+    assert hass.states.get(main_tension).attributes["unit_of_measurement"] == "lbs"
+    reg = er.async_get(hass)
+    assert reg.async_get(main_string).entity_category is None  # Controls
+
+    with patch.object(hass.config_entries, "async_reload") as reload:
+        await hass.services.async_call(
+            "text",
+            "set_value",
+            {"entity_id": main_string, "value": " RPM Blast "},
+            blocking=True,
+        )
+        # Only the main string: the button still has nothing to log
+        with pytest.raises(ServiceValidationError):
+            await hass.services.async_call(
+                "button",
+                "press",
+                {"entity_id": "button.pure_aero_restring_with_usual_setup"},
+                blocking=True,
+            )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": main_tension, "value": 52},
+            blocking=True,
+        )
+        await hass.services.async_call(
+            "number",
+            "set_value",
+            {"entity_id": "number.pure_aero_usual_cost", "value": 25.5},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+    reload.assert_not_called()
+    assert entry.options["setup"] == {
+        "main_string": "RPM Blast",
+        "main_tension": 52,
+        "cost": 25.5,
+    }
+    assert isinstance(entry.options["setup"]["main_tension"], int)
+    assert hass.states.get(main_string).state == "RPM Blast"
+    assert hass.states.get(main_tension).state == "52.0"
+    cost = hass.states.get("number.pure_aero_usual_cost")
+    assert cost.attributes["unit_of_measurement"] == "SGD"
+
+    await hass.services.async_call(
+        "button",
+        "press",
+        {"entity_id": "button.pure_aero_restring_with_usual_setup"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    a = hass.states.get("sensor.pure_aero_strings").attributes
+    assert (a["main_string"], a["main_tension"], a["cost"]) == ("RPM Blast", 52, 25.5)
+
+    # The options flow shows and changes the same values
+    await _configure(
+        hass, entry_id, setup={"main_string": "Hyper-G", "main_tension": 50.0}
+    )
+    assert hass.states.get(main_string).state == "Hyper-G"
+    # Clearing a text field drops it from the setup
+    await hass.services.async_call(
+        "text", "set_value", {"entity_id": main_string, "value": ""}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert entry.options["setup"] == {"main_tension": 50}
+
+    # Other option changes still reload the racket
+    with patch.object(hass.config_entries, "async_reload") as reload:
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, "tension_unit": "kg"}
+        )
+        await hass.async_block_till_done()
+    reload.assert_called_once_with(entry_id)
 
 
 async def test_rename(hass: HomeAssistant) -> None:

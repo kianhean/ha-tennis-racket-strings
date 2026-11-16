@@ -92,7 +92,9 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CALENDAR,
     Platform.IMAGE,
+    Platform.NUMBER,
     Platform.SENSOR,
+    Platform.TEXT,
 ]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -591,7 +593,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
     entry.runtime_data = history
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_reload))
+    loaded = _options_needing_reload(entry)
+
+    async def _async_options_updated(
+        hass: HomeAssistant, entry: RacketConfigEntry
+    ) -> None:
+        # The usual setup fields write their option and update themselves
+        if _options_needing_reload(entry) != loaded:
+            await hass.config_entries.async_reload(entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     # Keep the tension sensors' statistics in line with the (possibly backdated)
     # history, so statistics graphs show it from the first restring on
@@ -626,8 +637,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
     return True
 
 
-async def _async_reload(hass: HomeAssistant, entry: RacketConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
+def _options_needing_reload(entry: RacketConfigEntry) -> dict[str, Any]:
+    """Every option but the usual setup, which is read when it's used."""
+    return {k: v for k, v in entry.options.items() if k != CONF_SETUP}
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bool:

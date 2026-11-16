@@ -102,8 +102,10 @@ The [example dashboard](#dashboard) has a button for each.
 
 ### Usual setup
 
-Save the string job you always get under **Configure → Usual setup**: main string and tension, and
-optionally crosses, stringer and cost. Then **Restring with usual setup**
+Save the string job you always get: main string and tension, and optionally crosses, stringer and
+cost. Fill them in under **Controls** on the racket's device page (**Usual main string**, **Usual
+main tension**, ...), or under **Configure → Usual setup**; both edit the same values. Then
+**Restring with usual setup**
 (`button.<racket>_restring_with_usual_setup`) logs it for today in one tap. Without a usual setup,
 the button repeats the latest restring's strings, tensions, stringer and cost. Rating, notes and
 photo are not copied.
@@ -522,6 +524,8 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `binary_sensor.<racket>_restring_due` | on (Due) / off | `due_date`, `days_until_due`, `reason`. Only with a restring rule |
 | `calendar.<racket>_restrings` | on during a restring / due day | Events: every restring and the next one due |
 | `button.<racket>_restring_with_usual_setup` | time last pressed | Logs the [usual setup](#usual-setup) for today |
+| `text.<racket>_usual_main_string`, `_usual_cross_string`, `_usual_stringer` | the [usual setup](#usual-setup) value, empty if unset | Editable; empty clears it |
+| `number.<racket>_usual_main_tension`, `_usual_cross_tension`, `_usual_cost` | the [usual setup](#usual-setup) value | Editable, in the racket's tension unit / your currency |
 | `button.<racket>_strings_broke` | time last pressed | Marks the current strings [broken](#when-strings-break) today |
 | `sensor.<racket>_average_string_life`, `_string_breakages`, `_string_cost_this_year`, `_string_cost_per_hour`, `_most_used_setup`, `_best_rated_setup` | see [String life and costs](#string-life-and-costs) | |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |

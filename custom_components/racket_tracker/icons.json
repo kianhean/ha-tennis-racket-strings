@@ -26,6 +26,17 @@
         "default": "mdi:camera"
       }
     },
+    "number": {
+      "usual_main_tension": {
+        "default": "mdi:arrow-expand-horizontal"
+      },
+      "usual_cross_tension": {
+        "default": "mdi:arrow-expand-vertical"
+      },
+      "usual_cost": {
+        "default": "mdi:cash"
+      }
+    },
     "sensor": {
       "strings": {
         "default": "mdi:tennis"
@@ -103,6 +114,17 @@
       },
       "best_rated_string": {
         "default": "mdi:star"
+      }
+    },
+    "text": {
+      "usual_main_string": {
+        "default": "mdi:tennis"
+      },
+      "usual_cross_string": {
+        "default": "mdi:tennis"
+      },
+      "usual_stringer": {
+        "default": "mdi:account-wrench"
       }
     }
   },

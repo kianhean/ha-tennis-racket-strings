@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, UnitOfTime
+from homeassistant.const import PERCENTAGE, Platform, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -36,7 +36,8 @@ from .const import (
     TENSION_UNIT_LBS,
 )
 from .dataset import ATTRIBUTION
-from .entity import racket_device_info
+from .due import due_rules, next_due
+from .entity import DailyRacketEntity, async_remove_entity, racket_device_info
 from .history import RacketHistory, with_image_url
 from .specs import SOURCE_DATASET, SPECS, Spec, effective_specs, spec_unit
 from .tension import Estimate, estimate, play_settings
@@ -192,6 +193,11 @@ async def async_setup_entry(
     async_add_entities(RacketSensor(hass, entry, desc) for desc in SENSORS)
 
     registry = er.async_get(hass)
+
+    if due_rules(entry.options):
+        async_add_entities([NextRestringSensor(entry, "next_restring")])
+    else:
+        async_remove_entity(hass, Platform.SENSOR, entry, "next_restring")
 
     # Estimates need hours of play per week; drop them when that's cleared.
     if play_settings(entry.options) is None:
@@ -349,8 +355,10 @@ class PlaySensor(SensorEntity):
         assert self._settings is not None
         attrs: dict[str, Any] = {
             "hours_per_week": self._settings.hours_per_week,
-            "initial_tension_loss": self._settings.initial_loss,
-            "tension_loss_per_hour": self._settings.loss_per_hour,
+            "string_type": self._settings.string_type,
+            "initial_tension_loss": self._settings.rates.initial,
+            "first_hour_loss": self._settings.rates.first_hour,
+            "relaxation_loss": self._settings.rates.relaxation,
         }
         if self.entity_description.key == "estimated_tension":
             est = self._estimate()
@@ -359,3 +367,15 @@ class PlaySensor(SensorEntity):
             attrs["estimated_cross_tension"] = est.cross_tension if est else None
             attrs[ATTR_DATE] = _latest(self._history, ATTR_DATE)
         return attrs
+
+
+class NextRestringSensor(DailyRacketEntity, SensorEntity):
+    """The date the current strings are due, from the racket's restring rules."""
+
+    _attr_device_class = SensorDeviceClass.DATE
+
+    @property
+    def native_value(self) -> date | None:
+        """Return the due date."""
+        due = next_due(self._history.latest, self._entry.options)
+        return due.date if due else None

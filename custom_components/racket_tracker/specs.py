@@ -80,7 +80,7 @@ SPEC_KEYS = tuple(s.key for s in SPECS)
 def spec_unit(entry: ConfigEntry, spec: Spec) -> str | None:
     """Unit of a spec for this racket."""
     if spec.tension_unit:
-        return entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
+        return str(entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS))
     return spec.unit
 
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-defined]
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -14,12 +15,14 @@ from homeassistant.core import (
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
+    callback,
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
+from .backfill import async_backfill
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_COST,
@@ -34,14 +37,18 @@ from .const import (
     ATTR_REMOVE_IMAGE,
     ATTR_RESTRING_ID,
     ATTR_STRINGER,
+    CONF_SETUP,
     CONF_TENSION_UNIT,
     DOMAIN,
     EDITABLE_FIELDS,
     EVENT_RESTRUNG,
     SERVICE_ADD_RESTRING,
+    SERVICE_CALIBRATE_TENSION,
     SERVICE_DELETE_RESTRING,
     SERVICE_GET_HISTORY,
+    SERVICE_REPEAT_RESTRING,
     SERVICE_UPDATE_RESTRING,
+    SETUP_FIELDS,
     TENSION_UNIT_LBS,
 )
 from .history import RacketHistory, new_restring_id, with_image_url
@@ -52,8 +59,23 @@ from .images import (
     image_dir,
 )
 from .specs import effective_specs
+from .tension import (
+    CONF_FIRST_HOUR_LOSS,
+    CONF_INITIAL_LOSS,
+    CONF_PLAY,
+    CONF_RELAXATION_LOSS,
+    calibrate,
+    migrate_play_options,
+    play_settings,
+)
 
-PLATFORMS: list[Platform] = [Platform.IMAGE, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.CALENDAR,
+    Platform.IMAGE,
+    Platform.SENSOR,
+]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type RacketConfigEntry = ConfigEntry[RacketHistory]
@@ -68,7 +90,7 @@ _TENSION = vol.All(vol.Coerce(float), vol.Range(min=1, max=100), _whole)
 _COST = vol.All(vol.Coerce(float), vol.Range(min=0), _whole)
 _RATING = vol.All(vol.Coerce(int), vol.Range(min=1, max=5))
 
-_RESTRING_FIELDS = {
+_RESTRING_FIELDS: dict[vol.Marker, Any] = {
     vol.Optional(ATTR_DATE): cv.date,
     vol.Optional(ATTR_CROSS_STRING): cv.string,
     vol.Optional(ATTR_CROSS_TENSION): _TENSION,
@@ -107,6 +129,26 @@ DELETE_SCHEMA = vol.Schema(
     }
 )
 
+REPEAT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_RESTRING_ID): cv.string,
+        vol.Optional(ATTR_DATE): cv.date,
+        vol.Optional(ATTR_COST): _COST,
+        vol.Optional(ATTR_STRINGER): cv.string,
+        vol.Optional(ATTR_NOTES): cv.string,
+        vol.Optional(ATTR_IMAGE): vol.Any(dict, cv.string),
+    }
+)
+
+CALIBRATE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required("tension"): _TENSION,
+        vol.Optional(ATTR_DATE): cv.date,
+    }
+)
+
 HISTORY_SCHEMA = vol.Schema({vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string})
 
 
@@ -132,6 +174,61 @@ def _serialize(data: dict[str, Any]) -> dict[str, Any]:
     return {k: v.isoformat() if isinstance(v, date) else v for k, v in data.items()}
 
 
+async def async_log_restring(
+    hass: HomeAssistant, entry: RacketConfigEntry, fields: dict[str, Any]
+) -> dict[str, Any]:
+    """Store a new restring, fire the restrung event and return the record."""
+    data = dict(fields)
+    data["id"] = new_restring_id()
+    if (image := data.pop(ATTR_IMAGE, None)) is not None:
+        data[ATTR_IMAGE] = await async_import_image(hass, image, data["id"])
+    data.setdefault(ATTR_DATE, dt_util.now().date())
+    # Full bed of one string unless a hybrid is specified
+    data.setdefault(ATTR_CROSS_STRING, data[ATTR_MAIN_STRING])
+    data.setdefault(ATTR_CROSS_TENSION, data[ATTR_MAIN_TENSION])
+    data["tension_unit"] = entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
+
+    record = await entry.runtime_data.async_add(_serialize(data))
+    record = with_image_url(record)
+    hass.bus.async_fire(
+        EVENT_RESTRUNG,
+        {"config_entry_id": entry.entry_id, "racket": entry.title, **record},
+    )
+    return record
+
+
+def usual_setup(
+    entry: RacketConfigEntry, restring_id: str | None = None
+) -> dict[str, Any]:
+    """Strings, tensions, stringer and cost to repeat.
+
+    From the given restring, else the racket's usual setup, else the latest restring.
+    """
+    history = entry.runtime_data
+    if restring_id is not None:
+        if (source := history.get(restring_id)) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="restring_not_found",
+                translation_placeholders={"restring_id": restring_id},
+            )
+    else:
+        setup = entry.options.get(CONF_SETUP) or {}
+        if setup.get(ATTR_MAIN_STRING) and setup.get(ATTR_MAIN_TENSION):
+            source = setup
+        elif (source := history.latest) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_setup",
+                translation_placeholders={"racket": entry.title},
+            )
+    return {
+        k: _whole(v) if isinstance(v, float) else v
+        for k in SETUP_FIELDS
+        if (v := source.get(k)) not in (None, "")
+    }
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the integration's actions and the photo URL path."""
     folder = image_dir(hass)
@@ -144,22 +241,55 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
         data = dict(call.data)
         data.pop(ATTR_CONFIG_ENTRY_ID)
-        data["id"] = new_restring_id()
-        if (image := data.pop(ATTR_IMAGE, None)) is not None:
-            data[ATTR_IMAGE] = await async_import_image(hass, image, data["id"])
-        data.setdefault(ATTR_DATE, dt_util.now().date())
-        # Full bed of one string unless a hybrid is specified
-        data.setdefault(ATTR_CROSS_STRING, data[ATTR_MAIN_STRING])
-        data.setdefault(ATTR_CROSS_TENSION, data[ATTR_MAIN_TENSION])
-        data["tension_unit"] = entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
-
-        record = await entry.runtime_data.async_add(_serialize(data))
-        record = with_image_url(record)
-        hass.bus.async_fire(
-            EVENT_RESTRUNG,
-            {"config_entry_id": entry.entry_id, "racket": entry.title, **record},
-        )
+        record = await async_log_restring(hass, entry, data)
         return {"racket": entry.title, "restring": record}
+
+    async def repeat_restring(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        data = dict(call.data)
+        data.pop(ATTR_CONFIG_ENTRY_ID)
+        fields = usual_setup(entry, data.pop(ATTR_RESTRING_ID, None))
+        record = await async_log_restring(hass, entry, {**fields, **data})
+        return {"racket": entry.title, "restring": record}
+
+    async def calibrate_tension(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        if (settings := play_settings(entry.options)) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_play_settings",
+                translation_placeholders={"racket": entry.title},
+            )
+        if (latest := entry.runtime_data.latest) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_restrings",
+                translation_placeholders={"racket": entry.title},
+            )
+        measured = call.data["tension"]
+        on = call.data.get(ATTR_DATE) or dt_util.now().date()
+        try:
+            fitted = calibrate(latest, settings, measured, on)
+        except ValueError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="cannot_calibrate",
+                translation_placeholders={
+                    "tension": str(measured),
+                    "strung": str(latest.get(ATTR_MAIN_TENSION)),
+                },
+            ) from err
+        rates = {
+            CONF_INITIAL_LOSS: fitted.rates.initial,
+            CONF_FIRST_HOUR_LOSS: fitted.rates.first_hour,
+            CONF_RELAXATION_LOSS: fitted.rates.relaxation,
+        }
+        play = {**entry.options[CONF_PLAY], **rates}
+        # Saving the options reloads the racket with the new rates
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_PLAY: play}
+        )
+        return {"racket": entry.title, "measured_tension": measured, **rates}
 
     async def update_restring(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
@@ -211,19 +341,34 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def get_history(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
         history = entry.runtime_data
-        return {
+        response: dict[str, Any] = {
             "racket": entry.title,
             "specs": effective_specs(entry),
             "restring_count": history.count,
             "total_cost": history.total_cost,
             "restrings": history.newest_first(),
         }
+        return response
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_ADD_RESTRING,
         add_restring,
         ADD_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REPEAT_RESTRING,
+        repeat_restring,
+        REPEAT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CALIBRATE_TENSION,
+        calibrate_tension,
+        CALIBRATE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
@@ -246,6 +391,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bool:
+    """Migrate options from older versions."""
+    if entry.version > 1:
+        return False  # Downgraded from a newer version
+    if entry.minor_version < 2:
+        # 1.2: the linear tension model's loss per hour became first_hour_loss
+        options = dict(entry.options)
+        if play := options.get(CONF_PLAY):
+            options[CONF_PLAY] = migrate_play_options(play)
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bool:
     """Set up a racket from a config entry."""
     history = RacketHistory(hass, entry.entry_id)
@@ -254,6 +412,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+
+    # Keep the tension sensors' statistics in line with the (possibly backdated)
+    # history, so statistics graphs show it from the first restring on
+    # One at a time, each reading the history once it runs, so a slow earlier
+    # run can't overwrite a newer one
+    lock = asyncio.Lock()
+
+    async def _run_backfill() -> None:
+        async with lock:
+            await async_backfill(hass, entry)
+
+    @callback
+    def _backfill() -> None:
+        entry.async_create_background_task(
+            hass, _run_backfill(), f"{DOMAIN} backfill {entry.entry_id}"
+        )
+
+    entry.async_on_unload(history.async_add_listener(_backfill))
+    _backfill()
     return True
 
 

@@ -56,14 +56,28 @@ sections:
         tap_action:
           action: more-info
         entity: script.log_restring
-        grid_options: { columns: 6, rows: 2 }
+        grid_options: { columns: 4, rows: 2 }
+      # Logs the usual setup (Configure → Usual setup) for today, in one tap
+      - type: button
+        name: Usual setup
+        icon: mdi:repeat
+        entity: button.pure_aero_restring_with_usual_setup
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.pure_aero_restring_with_usual_setup
+          confirmation:
+            text: Log a restring with the usual setup for today?
+        grid_options: { columns: 4, rows: 2 }
       - type: button
         name: Rate strings
         icon: mdi:star
         tap_action:
           action: more-info
         entity: script.rate_current_strings
-        grid_options: { columns: 6, rows: 2 }
+        grid_options: { columns: 4, rows: 2 }
 
   # ── Current string notes ─────────────────────────────────────────
   - type: grid
@@ -106,14 +120,41 @@ sections:
             name: Tension (min)
           - entity: sensor.pure_aero_recommended_tension_max
             name: Tension (max)
-      - type: history-graph
+      # Statistics, not history: Strung backfills them from the restring dates,
+      # so backdated restrings show up in the graph too
+      - type: statistics-graph
         title: Tension over time
-        hours_to_show: 8760
+        chart_type: line
+        period: day
+        days_to_show: 180
+        stat_types: [mean]
         entities:
           - entity: sensor.pure_aero_tension
             name: Strung
           - entity: sensor.pure_aero_estimated_tension
             name: Estimated
+
+  # ── When to restring ─────────────────────────────────────────────
+  # Needs a rule under Configure → Restring reminder
+  - type: grid
+    cards:
+      - type: heading
+        heading: Schedule
+        icon: mdi:calendar-clock
+      - type: tile
+        entity: binary_sensor.pure_aero_restring_due
+        name: Restring due
+        grid_options: { columns: 6 }
+      - type: tile
+        entity: sensor.pure_aero_next_restring
+        name: Next restring
+        grid_options: { columns: 6 }
+      # Restrings and the next restring due (also in the sidebar's Calendar)
+      - type: calendar
+        initial_view: dayGridMonth
+        entities:
+          - calendar.pure_aero_restrings
+        grid_options: { columns: full, rows: 9 }
 
   # ── Full history with photos ─────────────────────────────────────
   - type: grid
@@ -138,7 +179,7 @@ sections:
           {{ ' | ' }}{{ r.date -}}
           {{ ' | ' }}{{ r.main_string }}{% if r.cross_string != r.main_string %} / {{ r.cross_string }}{% endif -%}
           {{ ' | ' }}{{ r.main_tension }}{% if r.cross_tension != r.main_tension %}/{{ r.cross_tension }}{% endif %} {{ r.tension_unit -}}
-          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is not none else '' -}}
+          {{ ' | ' }}{{ '%.0f' | format(r.cost) ~ ' ' ~ cur if r.cost is defined and r.cost is not none else '' -}}
           {{ ' | ' }}{{ '⭐' * r.rating if r.rating else '' -}}
           {{ ' | ' }}{{ (r.notes or '') | replace('\n', ' ') | replace('|', '/') }} |
           {% endfor -%}

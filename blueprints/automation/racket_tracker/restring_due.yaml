@@ -1,0 +1,59 @@
+blueprint:
+  name: Racket – restring due
+  description: >-
+    Get a notification when a racket's **Restring due** sensor turns on: the
+    strings reached the age, hours of play or estimated tension set under
+    **Restring reminder** in the racket's options. Logging a restring turns it
+    off again.
+  domain: automation
+  author: Strung
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/restring_due.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    due_sensor:
+      name: Restring due sensor
+      selector:
+        entity:
+          filter:
+            - integration: racket_tracker
+              domain: binary_sensor
+    notify_action:
+      name: Notify action
+      description: >-
+        The action that sends the notification, for example
+        notify.mobile_app_your_phone. Leave as notify.notify to use the default.
+      default: notify.notify
+      selector:
+        text: {}
+    extra_actions:
+      name: Extra actions (optional)
+      description: Anything else to do, for example add a to-do item.
+      default: []
+      selector:
+        action: {}
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input due_sensor
+    to: "on"
+
+variables:
+  due_sensor: !input due_sensor
+  racket: "{{ device_attr(device_id(due_sensor), 'name') or 'Your racket' }}"
+  reason: "{{ state_attr(due_sensor, 'reason') }}"
+  why: >-
+    {% if reason == 'hours_played' %}have been played the hours you set
+    {%- elif reason == 'min_tension' %}are estimated to be down to the tension you set
+    {%- else %}reached the age you set{% endif %}
+
+actions:
+  - action: !input notify_action
+    data:
+      title: "🎾 Time to restring"
+      message: "{{ racket }}'s strings {{ why }}."
+  - choose: []
+    default: !input extra_actions

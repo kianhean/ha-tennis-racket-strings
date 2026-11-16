@@ -106,3 +106,23 @@ rate_current_strings:
         {% if notes is defined and notes %}{% set d = dict(d, notes=notes) %}{% endif %}
         {% if image is defined and image %}{% set d = dict(d, image=image) %}{% endif %}
         {{ d }}
+
+# For examples/dashboard_multi.yaml: log the usual setup (or repeat the last restring)
+# for the racket picked in input_select.racket.
+restring_selected_racket:
+  alias: Restring selected racket
+  description: Log the selected racket's usual setup for today.
+  icon: mdi:repeat
+  mode: queued
+  sequence:
+    - variables:
+        racket: >
+          {% set name = states('input_select.racket') %}
+          {% set ns = namespace(entry=none) %}
+          {% for e in integration_entities('racket_tracker') | select('match', '^sensor[.].*_strings$') %}
+          {% if (device_attr(e, 'name_by_user') or device_attr(e, 'name')) == name %}{% set ns.entry = config_entry_id(e) %}{% endif %}
+          {% endfor %}
+          {{ ns.entry }}
+    - action: racket_tracker.repeat_restring
+      data:
+        config_entry_id: "{{ racket }}"

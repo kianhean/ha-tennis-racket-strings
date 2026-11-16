@@ -12,7 +12,7 @@ custom_components/racket_tracker/
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: download ≤ once a day (after HA start / on search) → .storage/racket_tracker.dataset; fallback racqix_dataset.json (bundled, unmodified CC BY-NC-ND: never edit, only replace); search, label, apply()
-├── repairs.py         # On entry setup: linked racket (async_get_racquet: /api/racquets/<slug>, ~6 kB, 404 = removed; never the list) → issues (specs changed / missing: fix flows; unreachable: warning, retry after 1 h)
+├── repairs.py         # On entry setup: linked racket looked up in the list (async_get_dataset; not in it = removed) → issues (specs changed / missing: fix flows; unreachable = no copy as new as the link's version: warning)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
 ├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
 ├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served) and import (parse_csv: validate all rows, skip duplicates)
@@ -79,9 +79,8 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   the API ignores search/filter params) is downloaded at most once a day, success or not
   (`attempted` in the store): in the background after HA starts, or on a search. Racqix's Vercel
   bot protection can answer HA with a 429 challenge; then the last download, else the bundled
-  copy, is searched. Tests patch `async_schedule_refresh` (conftest). The repairs check
-  asks for one linked racket (`/api/racquets/<slug>`: other field names, numbers as text; mapped by
-  `_DETAIL_FIELDS`). Tests mock both with `aioclient_mock` (`_mock_api` in test_dataset.py).
+  copy, is searched. The repairs check uses the same list (only if its version is at least the
+  link's). Tests patch `async_schedule_refresh` (conftest) and mock the list with `aioclient_mock`.
 - String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring
   descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
   main/cross string: used strings first, then the catalog. Runs on setup and history changes.

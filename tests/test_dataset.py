@@ -18,7 +18,6 @@ from custom_components.racket_tracker.const import DOMAIN
 from custom_components.racket_tracker.dataset import (
     ATTRIBUTION,
     DATASET_URL,
-    RACQUET_URL,
     Dataset,
     async_get_dataset,
     async_schedule_refresh,
@@ -98,21 +97,7 @@ def test_search_and_label() -> None:
 
 
 def _mock_api(aioclient_mock: AiohttpClientMocker) -> None:
-    """The list, and each racket on its own (what the repairs check asks for)."""
     aioclient_mock.get(DATASET_URL, json=PAYLOAD)
-    detail = {
-        "weight": "specs_weight_unstrung_g",
-        "balance_mm": "specs_balance_unstrung_mm",
-        "swingweight": "advanced_swingweight",
-        "ra": "specs_stiffness_ra",
-        "head_size": "specs_head_size_in",
-        "string_pattern": "specs_string_pattern",
-    }
-    for racquet in RACQUETS:
-        aioclient_mock.get(
-            RACQUET_URL.format(slug=racquet["slug"]),
-            json={detail.get(k, k): v for k, v in racquet.items()},
-        )
 
 
 def _list_calls(aioclient_mock: AiohttpClientMocker) -> int:

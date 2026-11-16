@@ -224,8 +224,8 @@ listed for roughly 40% of them.
   dataset and raises a **repair** under **Settings → System → Repairs** if the dataset changed
   its specs (fix: take the new values; your measurements still win), if the racket is no longer
   in it (fix: unlink and keep the specs), or if the dataset can't be reached (the specs keep
-  working). This asks racqix.com for that one racket only (not the whole list), at most once a day, and
-  at most once an hour after a failure.
+  working). It uses the same daily list (or its offline copy, if that is as new as the version the
+  racket was linked from), so it never makes a request of its own.
 
 ## Estimated tension
 

@@ -1,11 +1,13 @@
 """Repair issues for rackets linked to the Racqix dataset.
 
-When a racket with looked-up specs is set up, its dataset entry is fetched on
-its own (dataset.async_get_racquet: that racket only, kept for a day; never the
-whole list) and compared:
+When a racket with looked-up specs is set up, it is looked up in the racket
+list (dataset.async_get_dataset: downloaded at most once a day, else the last
+download or the bundled copy) and compared:
 
-- dataset_unreachable: the list couldn't be fetched. Nothing breaks: the
-  specs are kept in the racket's options. Removed once a check succeeds.
+- dataset_unreachable: there is no copy of the list at least as new as the one
+  the racket was linked from (the download failed and the bundled copy is
+  older). Nothing breaks: the specs are kept in the racket's options. Removed
+  once a check succeeds.
 - dataset_racket_missing (fixable): the racket is no longer in the dataset.
   Fixing it unlinks the racket and keeps the specs.
 - dataset_specs_changed (fixable): the dataset now has other values for the
@@ -14,9 +16,8 @@ whole list) and compared:
 
 from __future__ import annotations
 
-import asyncio
 import json
-from datetime import timedelta
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -25,13 +26,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .dataset import (
     CONF_DATASET_RACKET,
     DatasetError,
-    async_get_racquet,
+    async_get_dataset,
     dataset_specs,
     label,
 )
@@ -42,9 +42,6 @@ ISSUE_MISSING = "dataset_racket_missing"
 ISSUE_CHANGED = "dataset_specs_changed"
 _ENTRY_ISSUES = (ISSUE_MISSING, ISSUE_CHANGED)
 
-# Don't ask again for an hour after a failed fetch
-_RETRY = timedelta(hours=1)
-_STATE_KEY = f"{DOMAIN}_dataset_check"
 _UNITS = {spec.key: spec.unit or "" for spec in SPECS}
 
 
@@ -57,6 +54,11 @@ def async_delete_racket_issues(hass: HomeAssistant, entry_id: str) -> None:
     """Remove a racket's dataset issues (unlinked or removed)."""
     for kind in _ENTRY_ISSUES:
         ir.async_delete_issue(hass, DOMAIN, _issue_id(kind, entry_id))
+
+
+def _version(text: Any) -> tuple[int, ...]:
+    """ "2026.1" -> (2026, 1), for comparing dataset versions."""
+    return tuple(int(n) for n in re.findall(r"\d+", str(text or "")))
 
 
 def _format(key: str, value: Any) -> str:
@@ -82,29 +84,24 @@ async def async_check_dataset(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if not linked:
         async_delete_racket_issues(hass, entry.entry_id)
         return
-    state: dict[str, Any] = hass.data.setdefault(
-        _STATE_KEY, {"lock": asyncio.Lock(), "failed": None}
-    )
-    async with state["lock"]:
-        failed = state["failed"]
-        if failed is not None and dt_util.utcnow() - failed < _RETRY:
-            return
-        try:
-            racquet = await async_get_racquet(hass, str(linked.get("slug")))
-        except DatasetError:
-            state["failed"] = dt_util.utcnow()
-            ir.async_create_issue(
-                hass,
-                DOMAIN,
-                ISSUE_UNREACHABLE,
-                is_fixable=False,
-                is_persistent=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key=ISSUE_UNREACHABLE,
-            )
-            return
-        state["failed"] = None
-        ir.async_delete_issue(hass, DOMAIN, ISSUE_UNREACHABLE)
+    try:
+        dataset = await async_get_dataset(hass)
+    except DatasetError:
+        dataset = None
+    if dataset is None or _version(dataset.version) < _version(linked.get("version")):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            ISSUE_UNREACHABLE,
+            is_fixable=False,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_UNREACHABLE,
+        )
+        return
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_UNREACHABLE)
+    slug = linked.get("slug")
+    racquet = next((r for r in dataset.racquets if r.get("slug") == slug), None)
 
     missing_id = _issue_id(ISSUE_MISSING, entry.entry_id)
     changed_id = _issue_id(ISSUE_CHANGED, entry.entry_id)

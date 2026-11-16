@@ -12,27 +12,30 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 )
 
 from custom_components.racket_tracker.const import DOMAIN
-from custom_components.racket_tracker.dataset import DATASET_URL, RACQUET_URL
+from custom_components.racket_tracker.dataset import DATASET_URL
 from custom_components.racket_tracker.repairs import describe_changes
 
-URL = RACQUET_URL.format(slug="babolat-pure-aero-2023")
+URL = DATASET_URL
+OTHER = {"slug": "wilson-blade-98-v9", "brand": "Wilson", "model": "Blade 98"}
 
 
-def _detail(**changes: str) -> dict:
-    """The single-racket API's answer: other field names, numbers as text."""
+def _list(*racquets: dict, version: str = "2026.1") -> dict:
+    """The racket list, as the API sends it."""
+    return {"dataset_version": version, "racquets": [OTHER, *racquets]}
+
+
+def _racquet(**changes: object) -> dict:
     return {
         "slug": "babolat-pure-aero-2023",
         "brand": "Babolat",
         "model": "Pure Aero",
         "year": "2023",
-        "specs_weight_unstrung_g": "300",
-        "specs_balance_unstrung_mm": "320",
-        "advanced_swingweight": "320",
-        "specs_stiffness_ra": "68",
-        "specs_head_size_in": "100",
-        "specs_string_pattern": "16x19",
-        "scores_spin": "100",
-        "updated_at\r": "2025-12-23\r",  # sic
+        "weight": 300,
+        "balance_mm": 320,
+        "swingweight": 320,
+        "ra": 68,
+        "head_size": 100,
+        "string_pattern": "16x19",
         **changes,
     }
 
@@ -59,7 +62,7 @@ async def _setup(hass: HomeAssistant, options: dict) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     return entry
 
 
@@ -74,7 +77,7 @@ async def _fix(hass: HomeAssistant, hass_client, issue_id: str) -> dict:
     assert flow["step_id"] == "confirm"
     resp = await client.post(f"/api/repairs/issues/fix/{flow['flow_id']}")
     assert resp.status == 200
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     return flow
 
 
@@ -91,20 +94,19 @@ def test_describe_changes() -> None:
 async def test_up_to_date_racket_has_no_issue(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(URL, json=_detail())
+    aioclient_mock.get(URL, json=_list(_racquet()))
     await _setup(hass, LINKED)
     assert not ir.async_get(hass).issues
-    # Not linked: no request at all
+    # Another racket, linked or not: the list isn't downloaded again that day
+    await _setup(hass, LINKED)
     await _setup(hass, {"tension_unit": "lbs"})
     assert aioclient_mock.call_count == 1
-    # Only that racket was asked for, never the whole list
-    assert all(str(url) != DATASET_URL for _, url, *_ in aioclient_mock.mock_calls)
 
 
 async def test_specs_changed(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_client
 ) -> None:
-    aioclient_mock.get(URL, json=_detail(specs_stiffness_ra="66"))
+    aioclient_mock.get(URL, json=_list(_racquet(ra=66)))
     entry = await _setup(hass, {**LINKED, "specs": {"stiffness": 70}})
     issue_id = f"dataset_specs_changed_{entry.entry_id}"
     issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
@@ -124,7 +126,7 @@ async def test_specs_changed(
 async def test_racket_missing(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, hass_client
 ) -> None:
-    aioclient_mock.get(URL, status=404, json={"error": "Racquet not found"})
+    aioclient_mock.get(URL, json=_list())
     entry = await _setup(hass, LINKED)
     issue_id = f"dataset_racket_missing_{entry.entry_id}"
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
@@ -142,7 +144,7 @@ async def test_racket_missing(
 async def test_removing_racket_removes_its_issues(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(URL, status=404, json={"error": "Racquet not found"})
+    aioclient_mock.get(URL, json=_list())
     entry = await _setup(hass, LINKED)
     assert ir.async_get(hass).issues
     await hass.config_entries.async_remove(entry.entry_id)
@@ -154,22 +156,42 @@ async def test_unreachable(
     aioclient_mock: AiohttpClientMocker,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    aioclient_mock.get(URL, status=503)
-    entry = await _setup(hass, LINKED)
+    # Linked from a newer list than the bundled copy, and Racqix says 429
+    linked = {
+        **LINKED,
+        "dataset_racket": {**LINKED["dataset_racket"], "version": "2027.1"},
+    }
+    aioclient_mock.get(URL, status=429)
+    entry = await _setup(hass, linked)
     assert ir.async_get(hass).async_get_issue(DOMAIN, "dataset_unreachable")
     # Specs keep working
     assert float(hass.states.get("sensor.aero_stiffness").state) == 68
 
-    # A reload within the hour doesn't ask again
+    # A reload the same day doesn't ask again
     await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert aioclient_mock.call_count == 1
 
-    # Later, it's back
-    freezer.tick(3700)
+    # A day later, it's back
+    freezer.tick(24 * 3600 + 1)
     aioclient_mock.clear_requests()
-    aioclient_mock.get(URL, json=_detail())
+    aioclient_mock.get(URL, json=_list(_racquet(), version="2027.1"))
     await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert aioclient_mock.call_count == 1
     assert not ir.async_get(hass).issues
+
+
+async def test_checked_against_bundled_copy(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Racqix refuses, but the bundled list is as new as the link: check against it."""
+    aioclient_mock.get(URL, status=429)
+    linked = {
+        **LINKED,
+        "dataset_racket": {**LINKED["dataset_racket"], "slug": "x-gone"},
+    }
+    entry = await _setup(hass, linked)
+    issues = ir.async_get(hass)
+    assert issues.async_get_issue(DOMAIN, "dataset_unreachable") is None
+    assert issues.async_get_issue(DOMAIN, f"dataset_racket_missing_{entry.entry_id}")

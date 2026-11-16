@@ -7,8 +7,8 @@ search after that. The download is kept in .storage/racket_tracker.dataset, so a
 restart doesn't download it again. When there is no download yet and Racqix can't
 be reached (its bot protection sometimes answers HA with a 429 challenge), the
 copy bundled with the integration (racqix_dataset.json, unmodified, see
-racqix_dataset.NOTICE.md) is used. Checking an already linked racket
-asks for that racket only (async_get_racquet). Matched values go to `options["dataset_specs"]`, the base layer
+racqix_dataset.NOTICE.md) is used. The repairs check for linked rackets uses
+the same list. Matched values go to `options["dataset_specs"]`, the base layer
 under the user's own measurements (see specs.effective_specs).
 """
 
@@ -19,12 +19,10 @@ import dataclasses
 import json
 import logging
 import re
-import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 import aiohttp
 from homeassistant.core import HomeAssistant, callback
@@ -45,15 +43,12 @@ from .specs import CONF_DATASET_SPECS, SPECS
 _LOGGER = logging.getLogger(__name__)
 
 DATASET_URL = "https://www.racqix.com/api/racquets?mode=minimal"
-# One racket (~6 kB); 404 when it isn't in the dataset
-RACQUET_URL = "https://www.racqix.com/api/racquets/{slug}"
 DATASET_NAME = "Racqix Tennis Racquet Dataset"
 ATTRIBUTION = f"Specs from the {DATASET_NAME} (racqix.com)"
 
 CONF_DATASET_RACKET = "dataset_racket"
 
 MAX_MATCHES = 50
-_CACHE_SECONDS = 24 * 3600
 # At most one download of the list a day, whether it worked or not
 _REFRESH_INTERVAL = timedelta(days=1)
 _TIMEOUT = aiohttp.ClientTimeout(total=20)
@@ -61,21 +56,6 @@ _DATA_KEY = "racket_tracker_dataset"
 _STORE_KEY = f"{DOMAIN}.dataset"
 _STORE_VERSION = 1
 BUNDLED_FILE = Path(__file__).parent / "racqix_dataset.json"
-_RACQUET_KEY = "racket_tracker_racquets"
-
-# Single-racket field -> the list's (minimal) field, so both read the same way
-_DETAIL_FIELDS = {
-    "slug": "slug",
-    "brand": "brand",
-    "model": "model",
-    "year": "year",
-    "specs_weight_unstrung_g": "weight",
-    "specs_balance_unstrung_mm": "balance_mm",
-    "advanced_swingweight": "swingweight",
-    "specs_stiffness_ra": "ra",
-    "specs_head_size_in": "head_size",
-    "specs_string_pattern": "string_pattern",
-}
 
 # Dataset field -> our spec key
 _SPEC_FIELDS = {
@@ -207,40 +187,6 @@ def async_schedule_refresh(hass: HomeAssistant) -> None:
         )
 
     async_at_started(hass, _refresh)
-
-
-async def async_get_racquet(hass: HomeAssistant, slug: str) -> dict[str, Any] | None:
-    """One racket from the dataset, or None if it was removed.
-
-    Asks for that racket only, not the whole list (the repairs check uses it).
-    The answer is kept for a day. Raises DatasetError if it can't be fetched.
-    """
-    cache: dict[str, tuple[float, dict[str, Any] | None]] = hass.data.setdefault(
-        _RACQUET_KEY, {}
-    )
-    if (hit := cache.get(slug)) and time.monotonic() - hit[0] < _CACHE_SECONDS:
-        return hit[1]
-    url = RACQUET_URL.format(slug=quote(slug, safe=""))
-    session = async_get_clientsession(hass)
-    try:
-        async with session.get(url, timeout=_TIMEOUT) as resp:
-            if resp.status == 404:
-                racquet = None
-            else:
-                resp.raise_for_status()
-                payload = await resp.json(content_type=None)
-                if not isinstance(payload, dict) or not payload.get("slug"):
-                    raise ValueError("unexpected response")
-                # Some keys come with a stray "\r"
-                fields = {str(k).strip(): v for k, v in payload.items()}
-                racquet = {
-                    ours: fields.get(theirs) for theirs, ours in _DETAIL_FIELDS.items()
-                }
-    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
-        _LOGGER.warning("Couldn't fetch %s: %r", url, err)
-        raise DatasetError(str(err)) from err
-    cache[slug] = (time.monotonic(), racquet)
-    return racquet
 
 
 def _tokens(text: str) -> list[str]:

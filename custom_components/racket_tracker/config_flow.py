@@ -75,6 +75,7 @@ from .tension import (
     CONF_RELAXATION_LOSS,
     CONF_STRING_TYPE,
     CONF_TWU_LOSS,
+    PRESET_MINOR_VERSION,
     STRING_TYPES,
 )
 
@@ -323,7 +324,7 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
     """Add a racket."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = PRESET_MINOR_VERSION
 
     _name: str
     _current: dict[str, Any] | None

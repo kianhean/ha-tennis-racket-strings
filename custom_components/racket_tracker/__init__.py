@@ -83,9 +83,12 @@ from .tension import (
     CONF_INITIAL_LOSS,
     CONF_PLAY,
     CONF_RELAXATION_LOSS,
+    PRESET_MINOR_VERSION,
     calibrate,
     migrate_play_options,
+    move_old_presets,
     play_settings,
+    uses_old_presets,
 )
 
 PLATFORMS: list[Platform] = [
@@ -634,6 +637,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> 
         if play := options.get(CONF_PLAY):
             options[CONF_PLAY] = migrate_play_options(play)
         hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    if entry.minor_version < PRESET_MINOR_VERSION:
+        # 1.3: the tension presets were recalibrated to the measured loss.
+        # Values saved from the old form are the old presets: move them, so an
+        # estimate doesn't jump by 40-80 % for reasons the user can't see. A rate
+        # the user really changed, or a calibrated racket, keeps its options.
+        if uses_old_presets(play := entry.options.get(CONF_PLAY) or {}):
+            hass.config_entries.async_update_entry(
+                entry,
+                options={**entry.options, CONF_PLAY: move_old_presets(play)},
+                minor_version=PRESET_MINOR_VERSION,
+            )
+        else:
+            hass.config_entries.async_update_entry(
+                entry, minor_version=PRESET_MINOR_VERSION
+            )
     return True
 
 

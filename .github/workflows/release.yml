@@ -57,6 +57,13 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The bundled Racqix list is what installs that can't download it search, so each release
+      # carries the newest copy. A download Racqix refuses changes nothing (scripts/update_dataset.py
+      # leaves the file alone) and keeps the step green: it mustn't hold up a release.
+      - name: Refresh the bundled racquet list
+        if: steps.tag_check.outputs.exists == 'false'
+        run: python scripts/update_dataset.py || echo "::notice::Couldn't refresh the bundled list; releasing as committed"
+
       # HACS installs this zip (hacs.json: zip_release + filename) instead of the source
       # archive, so GitHub counts every install and update: the README downloads badge.
       # Files sit at the zip's root; HACS extracts them into custom_components/racket_tracker.

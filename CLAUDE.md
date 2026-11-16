@@ -40,6 +40,7 @@ examples/              # scripts.yaml (form UI), dashboard.yaml (one racket), da
 images/brand/          # strung-logo.jpg (the logo) → make_brand.py → brand/*.png (no tagline; light logo recolours white to navy)
 images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml and dashboard_multi.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
+scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --check and --refused for CI
 ```
 
 ## Data model
@@ -66,10 +67,20 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   string's material from the string catalog, else polyester (`string_type_source`). Pass the
   restring whose estimate you want (backfill does it per record).
   loss = initial + relaxation·log10(days) + first_hour·log2(1 + hours), capped at 50 %. The
-  model and its presets are cited in `tension.py` and README "Where the numbers come from"; keep
-  both in sync. `calibrate_tension` scales all three rates to a measured tension. Entry minor
-  version 2 migrated the old linear `tension_loss_per_hour` (×3 → `first_hour_loss`). Without
-  hours/week the estimate sensors are removed.
+  presets are set so that, with the TWU loss at its type's median, the total is about 24 %
+  (polyester), 15 % (nylon) and 12.5 % (gut) after 2 weeks at 4 h/week — inside TWU's measured
+  range for each type and well below the medians, which is deliberate (see the docstring).
+  The model and its presets are cited in `tension.py` and README "Where the numbers come from";
+  keep both in sync. `calibrate_tension` scales all three rates to a measured tension. Entry
+  minor version 2 migrated the old linear `tension_loss_per_hour` (×3 → `first_hour_loss`). Minor
+  version 3 (`PRESET_MINOR_VERSION`) recalibrated the presets to the TWU-measured totals (they
+  were ~0.6×); `async_migrate_entry` also moves stored values equal to the old preset
+  (`OLD_PRESETS`, `uses_old_presets`, `move_old_presets`) because the play form saved the
+  suggested value as the racket's own rate — a rate the user changed, or a calibrated one, stays.
+  Migration steps run only below their minor version (HA may call it more than once per setup),
+  and the flow's `MINOR_VERSION` is `PRESET_MINOR_VERSION` so new entries are never migrated.
+  Without hours/week the estimate sensors are removed; tests in `tests/test_tension.py` cover
+  every step, custom rates, a restart and a downgraded entry.
 - `due` (optional section): `days`, `hours_played`, `min_tension` (racket unit); earliest wins.
   `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
   due binary sensor and next_restring sensor are removed.
@@ -90,6 +101,12 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   bot protection can answer HA with a 429 challenge; then the last download, else the bundled
   copy, is searched. The repairs check uses the same list (only if its version is at least the
   link's). Tests patch `async_schedule_refresh` (conftest) and mock the list with `aioclient_mock`.
+  The bundled copy is kept fresh by `scripts/update_dataset.py` (stdlib only): `workflow_call`
+  replaces the file right before `release.yml` zips (never failing the release), and
+  `dataset-refresh.yml` runs `--check` daily and opens/updates the `dataset/refresh` PR, plus an
+  empty commit to main so scheduled workflows keep running. A 429 from either URL is never
+  written; a payload needs >= `MIN_RACQUETS` and a version. Tests load it by path and point the
+  files at `tmp_path` (`tests/test_dataset_update.py`).
 - String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring
   descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
   main/cross string: used strings first, then the catalog. Runs on setup and history changes.
@@ -134,6 +151,12 @@ Bump `version` in `manifest.json` in every PR that changes shipped code. Merging
 makes `release.yml` tag `v<version>`, create the GitHub release and attach `racket_tracker.zip`
 (built with `git archive HEAD:custom_components/racket_tracker`), which HACS installs
 (`hacs.json`: `zip_release`).
+
+The bundled Racqix list is refreshed by each release: `release.yml` runs
+`python scripts/update_dataset.py` right before `git archive`, and on failure (Racqix's 429
+challenge) releases what is committed. A release doesn't bump the manifest. To refresh the file
+by hand: `python scripts/update_dataset.py` (adds the notice's served-on date); commit it and
+bump the version only if the data should ship now.
 
 ## Conventions
 

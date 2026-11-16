@@ -1,0 +1,123 @@
+name: Dataset refresh
+
+# The Racqix list ships with the integration for installs that can't download it,
+# so it has to be replaced when Racqix updates it (about once a year).
+#  - daily: compare versions, then open or update a pull request with a fresh
+#    download. racqix.com's bot protection answers GitHub's anonymous jobs with
+#    429 far more often than not. If that lasts, a maintainer downloads the file
+#    once (python scripts/update_dataset.py) and pushes it: after that, the empty
+#    commit below keeps GitHub running this workflow on activity in the repo;
+#  - at the start of each release build: release.yml downloads the list right
+#    before it zips, so the release carries the newest copy.
+# A day Racqix refuses is skipped, and a refused response is never written
+# (scripts/update_dataset.py).
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      direct:
+        description: "Commit a refresh to main instead of opening a pull request"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dataset
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Is the bundled list current?
+    runs-on: ubuntu-latest
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare versions
+        id: check
+        run: |
+          set +e
+          python scripts/update_dataset.py --check
+          STATUS=$?
+          set -e
+          if [ "$STATUS" = 1 ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" != 0 ]; then
+            echo "::notice::Racqix didn't answer; the bundled list was left alone"
+          fi
+
+  refresh:
+    name: Download and propose an update
+    needs: check
+    if: needs.check.outputs.stale == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the list
+        run: python scripts/update_dataset.py
+
+      # update_dataset.py only writes a complete, current list; this catches
+      # anything else before it reaches a pull request.
+      - name: Sanity check the file
+        run: |
+          python - <<'PY'
+          import json, sys
+          payload = json.load(open("custom_components/racket_tracker/racqix_dataset.json", encoding="utf-8"))
+          racquets = payload["racquets"]
+          if not racquets or len(racquets) != payload.get("total_racquets"):
+              sys.exit("racquet count doesn't match total_racquets")
+          print(f"{payload['dataset_version']}: {len(racquets)} rackets")
+          PY
+
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: dataset/refresh
+          DIRECT: ${{ inputs.direct }}
+        run: |
+          VERSION=$(python -c 'import json;print(json.load(open("custom_components/racket_tracker/racqix_dataset.json"))["dataset_version"])')
+          if git diff --quiet; then
+            echo "::notice::Already current ($VERSION)"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit -am "Update the bundled Racqix list to $VERSION"
+          if [ "$DIRECT" = "true" ]; then
+            git push origin "HEAD:main"
+            echo "::notice::Pushed the $VERSION refresh to main"
+            exit 0
+          fi
+          git push -f origin "$BRANCH"
+          if gh pr view "$BRANCH" --json state --jq .state | grep -q OPEN; then
+            echo "::notice::Updated the open pull request for $VERSION"
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "Update the bundled Racqix list to $VERSION" \
+              --body "Racqix published a new version of its dataset. This replaces the copy bundled for installs that can't download the list (unmodified, CC BY-NC-ND 4.0) and moves its notice with it.
+
+          Nothing else changes. A linked racket with changed specs gets a repair on its own, and the manifest version is untouched (bump it only if you want a release now)."
+          fi
+
+  keep-alive:
+    name: Keep the scheduled run going
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub pauses scheduled workflows in a repo with no activity for 60 days.
+      # This real commit to main keeps this one (and Hassfest) running.
+      - uses: actions/checkout@v4
+      - name: Empty commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "Keep scheduled workflows running"
+          git push

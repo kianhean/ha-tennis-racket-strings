@@ -223,8 +223,8 @@ listed for roughly 40% of them.
   `429 Too Many Requests`), Strung searches the last download, or else the copy that ships with
   the integration ([`racqix_dataset.json`](custom_components/racket_tracker/racqix_dataset.json),
   v2026.1, an unmodified copy under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/),
-  [notice](custom_components/racket_tracker/racqix_dataset.NOTICE.md)). The pick step then says
-  "offline copy".
+  [notice](custom_components/racket_tracker/racqix_dataset.NOTICE.md)). Each release tries to
+  replace that copy with the newest list; the pick step says "offline copy".
 - Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
 - To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
 - When a linked racket is set up (at startup, or after a change), Strung checks it against the
@@ -255,9 +255,9 @@ play costs most in the first hours: each doubling of the hours played costs as m
 |---|---|---|---|
 | Hours of play per week | required (0 for a spare racket) | | |
 | String type | default | | |
-| Initial tension loss | 10 % | 6 % | 4 % |
-| Loss in the first hour of play | 3 % | 1.5 % | 1 % |
-| Loss per tenfold age | 4 % | 2 % | 1.5 % |
+| Initial tension loss | 10 % | 6 % | 6 % |
+| Loss in the first hour of play | 3 % | 1.5 % | 1.5 % |
+| Loss per tenfold age | 4 % | 4 % | 1.5 % |
 
 Leave the three rates empty to use the string type's values. For a hybrid, pick the mains' type.
 Without a string type, the current main string's material from the
@@ -269,7 +269,9 @@ String Performance Database (on its website) lists a
 measured **Tension Loss (%)** for hundreds of strings. Enter your usual main string's value as
 **String's tension loss in the TWU database** and the string type's rates are scaled by how it
 compares with the median for that type (polyester 41 %, nylon 21 %, gut 15 %): a polyester at
-30 % loses 30/41 of the polyester defaults. Rates you type in, or calibrate, still win.
+30 % loses 30/41 of the polyester defaults. Rates you type in, or calibrate, still win. The
+defaults are calibrated so that the estimate is a little below the TWU average for each material
+(see [where the numbers come from](#where-the-numbers-come-from)).
 
 Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours played:
 10 % + 4 % × log10(14) + 3 % × log2(9) = 24 % lost, about **39.5 lbs** now.
@@ -300,28 +302,33 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
   A string clamped at 28 kg read 24.8 kg after 17 minutes, 21.9 kg after 3 days and an extrapolated
   19.1 kg after a year: about **4.3 % of the strung tension per tenfold time**
   ([Cross & Bower 2001](https://www.physics.usyd.edu.au/~cross/PUBLICATIONS/19.%20MeasureStringT.PDF)).
-  That is the polyester relaxation rate.
+  That is the polyester and nylon relaxation rate; their sample was nylon.
 - **Play costs most at first.** "Successive impacts result in successively smaller drops in
   tension", and about half of the drop over ten hard impacts came on the first (Cross & Bower 2001).
   "After using the racket for one or two sets, the tension will drop a further one or two kg"
-  from about 20 kg (Cross et al. 2000), roughly 3.5–7 % of the strung tension. A log of hours
-  gives that shape. The 3 % first-hour default gives about 9.5 % after 8 hours.
+  from about 20 kg (Cross et al. 2000): 5–10 % of the 25–28 kg strung tension. A log of hours
+  gives that shape; the 3 % first-hour default gives about 9.5 % after 8 hours of play.
 - **Materials.** "Natural gut has one of the lowest rates of tension loss … while all polyester
   strings lose tension rapidly" (Cross et al. 2000). "Polyester loses more than nylon which loses
   more than gut" (Lindsey, "How Tennis Strings Go Dead", Tennis Warehouse University, 2013).
-  The nylon and gut rates scale polyester's by roughly the ratio of the median losses in
-  Tennis Warehouse University's string database: polyester 41 %, nylon 21 %, gut 15 %
+  Gut loses least of the three, nylon sits between, and nylon's play loss is set a little higher
+  than polyester's because Tennis Warehouse University's measurements show nylon losing about
+  twice as much tension in its impact test. The medians that scale a string's own value
+  (polyester 41 %, nylon 21 %, gut 15 %) are Tennis Warehouse University's
   ([summary](https://thetennisindex.com/guides/compendium/string-types)).
 - **Initial loss.** Measured against the stringing machine's pull, strings lose much more in the
   first day (28 kg → about 20 kg, Cross et al. 2000), and the racket frame also shortens the
-  strings as they go in (Cross & Bower 2001). The 10 % is the loss relative to the freshly strung
-  racket, which is what a stringbed meter compares against. Calibrate if your meter disagrees.
+  strings as they go in (Cross & Bower 2001). The preset is the loss relative to the freshly
+  strung racket, which is what a stringbed meter compares against. Calibrate if your meter
+  disagrees.
 
 **Limits.** These are averages from a few lab strings, not your string in your climate; play
-intensity and temperature matter too. And tension isn't the whole story: strings feel "dead"
-mostly because the stringbed gets softer and the strings stop sliding back, not because of
-tension loss (Lindsey, "How Tennis Strings Go Dead", parts 1 and 2, Tennis Warehouse University,
-2013). For polyester, a
+intensity and temperature matter too. After two weeks of regular play the estimate lands at
+roughly 24 % for polyester, 15 % for nylon and 12 % for gut, below the average "Tension Loss"
+that Tennis Warehouse University measures for each material: the model is meant to be a guide,
+not a measurement. And tension isn't the whole story: strings feel "dead" mostly because the
+stringbed gets softer and the strings stop sliding back, not because of tension loss (Lindsey,
+"How Tennis Strings Go Dead", parts 1 and 2, Tennis Warehouse University, 2013). For polyester, a
 [restring rule](#restring-due) on days or hours of play is often a better trigger than a tension
 threshold.
 
@@ -582,6 +589,9 @@ the translations.
 
 Releases are automatic: bump `version` in `custom_components/racket_tracker/manifest.json` in your
 PR, and merging to `main` creates the GitHub release and the `racket_tracker.zip` that HACS installs.
+The release also refreshes the bundled Racqix list first with `python scripts/update_dataset.py`
+(standard library only); run that yourself to update the copy by hand. A daily workflow checks
+Racqix for a new version and opens a pull request if there is one.
 
 ## Contributing
 

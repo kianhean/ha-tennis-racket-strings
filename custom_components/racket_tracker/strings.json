@@ -21,7 +21,7 @@
         "sections": {
           "current": {
             "name": "Current strings (optional)",
-            "description": "The strings on the racket now. Saved as a restring on that date; on the latest restring's date it corrects that restring instead.",
+            "description": "The strings on the racket now. Change only the date to move the latest restring, or only the strings and tensions to correct it; change both to log a new restring.",
             "data": {
               "main_string": "Main string",
               "main_tension": "Main tension",
@@ -165,7 +165,7 @@
         "sections": {
           "current": {
             "name": "Current strings (optional)",
-            "description": "The strings on the racket now. Saved as a restring on that date; on the latest restring's date it corrects that restring instead.",
+            "description": "The strings on the racket now. Change only the date to move the latest restring, or only the strings and tensions to correct it; change both to log a new restring.",
             "data": {
               "main_string": "Main string",
               "main_tension": "Main tension",
@@ -273,7 +273,8 @@
       "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
       "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
       "setup_incomplete": "The usual setup needs at least a main string and a main tension.",
-      "current_incomplete": "The current strings need at least a main string and a main tension."
+      "current_incomplete": "The current strings need at least a main string and a main tension.",
+      "current_after_broken": "The latest restring's strings broke before that date. Clear the broken date with Update restring first, or log a new restring."
     }
   },
   "selector": {

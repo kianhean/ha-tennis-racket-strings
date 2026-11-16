@@ -291,16 +291,14 @@ async def async_log_restring(
     return record
 
 
-async def async_set_current_strings(
-    hass: HomeAssistant,
-    entry: RacketConfigEntry,
-    current: dict[str, Any],
-    tension_unit: str | None = None,
-) -> dict[str, Any] | None:
-    """Save the strings on the racket now (the forms' Current strings section).
+def current_strings_change(
+    latest: dict[str, Any] | None, current: dict[str, Any]
+) -> tuple[bool, dict[str, Any]]:
+    """What saving the forms' Current strings section does.
 
-    On the latest restring's date it edits that restring; on any other date (today
-    if empty) it logs a new one. Returns the changed record, or None if unchanged.
+    (True, changes) edits the latest restring: only its date moved, or only its
+    strings/tensions changed. (False, fields) logs a new restring: there is none
+    yet, or both changed. Empty changes: nothing to do.
     """
     fields: dict[str, Any] = {
         k: _whole(float(v)) if k in (ATTR_MAIN_TENSION, ATTR_CROSS_TENSION) else v
@@ -310,13 +308,32 @@ async def async_set_current_strings(
     fields[ATTR_DATE] = str(fields.get(ATTR_DATE) or dt_util.now().date())
     fields.setdefault(ATTR_CROSS_STRING, fields[ATTR_MAIN_STRING])
     fields.setdefault(ATTR_CROSS_TENSION, fields[ATTR_MAIN_TENSION])
+    if latest is None:
+        return False, fields
+    changes = {k: v for k, v in fields.items() if latest.get(k) != v}
+    if ATTR_DATE not in changes or set(changes) == {ATTR_DATE}:
+        return True, changes
+    return False, fields
+
+
+async def async_set_current_strings(
+    hass: HomeAssistant,
+    entry: RacketConfigEntry,
+    current: dict[str, Any],
+    tension_unit: str | None = None,
+) -> dict[str, Any] | None:
+    """Save the strings on the racket now (see current_strings_change).
+
+    Returns the changed or new record, or None if nothing changed.
+    """
     history = entry.runtime_data
-    if (latest := history.latest) is not None and latest.get(ATTR_DATE) == fields[
-        ATTR_DATE
-    ]:
-        if not (changes := {k: v for k, v in fields.items() if latest.get(k) != v}):
+    update, fields = current_strings_change(history.latest, current)
+    if update:
+        if not fields:
             return None
-        return await history.async_update(latest["id"], changes)
+        assert history.latest is not None
+        _check_broken_date({**history.latest, **fields})
+        return await history.async_update(history.latest["id"], fields)
     if tension_unit:
         fields["tension_unit"] = tension_unit
     return await async_log_restring(hass, entry, fields)

@@ -81,9 +81,9 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 If you filled in **Look up**, the next step lists the matching rackets. Pick yours, or leave it empty
 to skip. Brand, model, head size and string pattern you left blank come from the dataset.
 
-Under **Configure**, **Current strings** shows the latest restring. Change the strings, tensions or
-date and submit: on the latest restring's date it corrects that restring; on another date it logs a
-new one.
+Under **Configure**, **Current strings** shows the latest restring. Change only the date to move
+the latest restring, or only the strings and tensions to correct it. Change both to log a new
+restring.
 
 Repeat for each racket. To change the details or specs later, or to look the racket up later, click
 **Configure** on the racket. To rename it, use **⋮ → Reconfigure** (entity IDs keep their names).

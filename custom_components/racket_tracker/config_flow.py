@@ -28,8 +28,9 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 
-from . import async_set_current_strings
+from . import async_set_current_strings, current_strings_change
 from .const import (
+    ATTR_BROKEN_DATE,
     ATTR_COST,
     ATTR_CROSS_STRING,
     ATTR_CROSS_TENSION,
@@ -421,6 +422,14 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
             query = (data.pop(CONF_LOOKUP, None) or "").strip()
             keep = data.pop(CONF_USE_DATASET, True)
             self._current = data.pop(CONF_CURRENT, None)
+            if not errors and self._current and self._loaded:
+                update, changes = current_strings_change(
+                    self.config_entry.runtime_data.latest, self._current
+                )
+                latest = self.config_entry.runtime_data.latest or {}
+                broken = latest.get(ATTR_BROKEN_DATE)
+                if update and broken and changes.get(ATTR_DATE, "") > broken:
+                    errors["base"] = "current_after_broken"
             if not errors:
                 # Keep dataset values unless unlinked; the user's own specs are
                 # layered on top.

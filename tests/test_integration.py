@@ -317,7 +317,7 @@ async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
     assert record["cross_string"] == "RPM Blast 1.25"
     assert hass.states.get("sensor.blade_restrings").state == "1"
 
-    async def configure(current: dict) -> None:
+    async def configure(current: dict, error: str | None = None) -> None:
         result = await hass.config_entries.options.async_init(entry.entry_id)
         # The section is prefilled from the latest restring
         current_section = result["data_schema"].schema["current"]
@@ -331,6 +331,9 @@ async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"], {"tension_unit": "lbs", "current": current}
         )
+        if error:
+            assert result["errors"] == {"base": error}
+            return
         assert result["type"] == "create_entry"
         await hass.async_block_till_done()
 
@@ -347,7 +350,22 @@ async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
     )
     assert entry.runtime_data.count == 1
 
-    # Another date: a new restring
+    # Only the date changed: moves the latest restring
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-09-20"}
+    )
+    [record] = entry.runtime_data.restrings
+    assert record["date"] == "2026-09-20" and record["main_tension"] == 53
+
+    # Not past the day the strings broke
+    await entry.runtime_data.async_update(record["id"], {"broken_date": "2026-10-05"})
+    await configure(
+        {"main_string": "RPM Blast 1.25", "main_tension": 53, "date": "2026-10-10"},
+        "current_after_broken",
+    )
+    assert entry.runtime_data.latest["date"] == "2026-09-20"
+
+    # Strings and date changed: a new restring
     await configure(
         {
             "main_string": "Hyper-G 1.25",

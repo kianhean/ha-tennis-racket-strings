@@ -74,7 +74,8 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
   due binary sensor and next_restring sensor are removed.
 - `current` (form section, never stored as an option): main/cross string + tension and `date`
-  → `async_set_current_strings()`. Same date as the latest restring edits it, else logs a restring.
+  → `async_set_current_strings()` (`current_strings_change()`): only the date or only the
+  strings/tensions changed edits the latest restring; both changed (or no history) logs one.
   The add flow keeps it in `entry.data` until setup logs it (then clears data); the options flow
   prefills it from the latest restring and only shows it while the entry is loaded.
 - `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,

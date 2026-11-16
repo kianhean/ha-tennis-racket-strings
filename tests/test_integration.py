@@ -262,3 +262,18 @@ async def test_diagnostics(hass: HomeAssistant) -> None:
     assert diag["title"] == "Pure Aero"
     assert diag["options"]["brand"] == "Babolat"
     assert diag["restring_count"] == 1 and diag["restrings"][0]["main_string"] == "X"
+
+
+async def test_no_recorder(hass: HomeAssistant) -> None:
+    """Without the recorder, backfilling is skipped quietly."""
+    from custom_components.racket_tracker.backfill import async_backfill
+
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {"config_entry_id": entry_id, "main_string": "X", "main_tension": 50},
+        blocking=True,
+    )
+    await async_backfill(hass, hass.config_entries.async_get_entry(entry_id))

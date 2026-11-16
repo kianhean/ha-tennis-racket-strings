@@ -225,6 +225,16 @@ Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours pl
 `racket_tracker.calibrate_tension` (racket, measured tension, optional date). All three rates are
 scaled by the same factor so the estimate matches your measurement, and saved on the racket.
 
+### History, including backdated restrings
+
+Home Assistant only records a sensor from the moment it changes, so a restring you log late would
+show up as a sudden jump. Strung fills in the gap: after every restring you add, edit or delete, it
+writes hourly long-term statistics for **Tension** (the strung tension of the restring in effect)
+and **Estimated tension** (the estimate for each day), from the first restring up to now (at most
+three years). Use a **Statistics graph** card to see it, as the example dashboards do; a History
+graph only shows what was recorded live. Rewriting the history uses your current tension settings,
+so after calibrating, the past is re-estimated too. Needs the recorder (on by default).
+
 This adds three sensors, updated at midnight and after every restring: **Estimated tension** (in the
 racket's unit; `strung_tension`, `estimated_cross_tension` and the rates in use), **Estimated tension
 loss** (%) and **Hours played**. Clear the hours to remove them.
@@ -360,7 +370,8 @@ Home Assistant's built-in cards:
   which logs your [usual setup](#usual-setup) for today after a confirmation
 - a **Schedule** column: Restring due, Next restring and a month calendar of restrings and the next
   one due (remove it if you don't set a [restring rule](#restring-due))
-- the current setup's rating and notes, your specs, and tension (strung and estimated) over time
+- the current setup's rating and notes, your specs, and tension (strung and estimated) over time,
+  in a Statistics graph so [backdated restrings](#history-including-backdated-restrings) show too
 - a history table with photo thumbnails, strings, tensions, cost, stars and notes
 
 A test checks that every entity it uses exists. The screenshot at the top is this view in Home
@@ -387,7 +398,7 @@ Tests render every card with two rackets.
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/screenshots/dashboard-multi-dark.png">
-  <img src="images/screenshots/dashboard-multi-light.png" alt="The multi-racket view: a Racket dropdown set to Pure Aero with its photo, strings, estimate and next restring; an All rackets table showing Blade due; a graph of both rackets' estimated tension; and Pure Aero's restring history" width="800">
+  <img src="images/screenshots/dashboard-multi-light.png" alt="The multi-racket view: a Racket dropdown set to Blade with its photo, strings, estimate and a Restring due warning; an All rackets table; a graph of both rackets' estimated tension since June; and Blade's restring history" width="800">
 </picture>
 </p>
 

@@ -131,9 +131,12 @@ sections:
           {% endfor -%}
           {% endif %}
       # Built-in graphs can't follow the dropdown: add one line per racket.
-      - type: history-graph
+      - type: statistics-graph
         title: Estimated tension
-        hours_to_show: 2160
+        chart_type: line
+        period: day
+        days_to_show: 180
+        stat_types: [mean]
         grid_options: { columns: full }
         entities:
           - entity: sensor.pure_aero_estimated_tension

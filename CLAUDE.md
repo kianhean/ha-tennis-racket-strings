@@ -13,6 +13,7 @@ custom_components/racket_tracker/
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
 ├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
+├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
 ├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible play/due/setup/specs); options flow edits them; reconfigure renames

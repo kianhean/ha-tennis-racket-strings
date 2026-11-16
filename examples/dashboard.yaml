@@ -120,9 +120,14 @@ sections:
             name: Tension (min)
           - entity: sensor.pure_aero_recommended_tension_max
             name: Tension (max)
-      - type: history-graph
+      # Statistics, not history: Strung backfills them from the restring dates,
+      # so backdated restrings show up in the graph too
+      - type: statistics-graph
         title: Tension over time
-        hours_to_show: 8760
+        chart_type: line
+        period: day
+        days_to_show: 180
+        stat_types: [mean]
         entities:
           - entity: sensor.pure_aero_tension
             name: Strung

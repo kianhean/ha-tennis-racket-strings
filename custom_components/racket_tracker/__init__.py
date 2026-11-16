@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Any
 
@@ -14,12 +15,14 @@ from homeassistant.core import (
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
+    callback,
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
+from .backfill import async_backfill
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_COST,
@@ -409,6 +412,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+
+    # Keep the tension sensors' statistics in line with the (possibly backdated)
+    # history, so statistics graphs show it from the first restring on
+    # One at a time, each reading the history once it runs, so a slow earlier
+    # run can't overwrite a newer one
+    lock = asyncio.Lock()
+
+    async def _run_backfill() -> None:
+        async with lock:
+            await async_backfill(hass, entry)
+
+    @callback
+    def _backfill() -> None:
+        entry.async_create_background_task(
+            hass, _run_backfill(), f"{DOMAIN} backfill {entry.entry_id}"
+        )
+
+    entry.async_on_unload(history.async_add_listener(_backfill))
+    _backfill()
     return True
 
 

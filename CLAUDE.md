@@ -11,7 +11,7 @@ custom_components/racket_tracker/
 ├── const.py           # DOMAIN, option keys, restring field names, action/event names
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
-├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
+├── dataset.py         # Racqix dataset: download ≤ once a day (after HA start / on search) → .storage/racket_tracker.dataset; fallback racqix_dataset.json (bundled, unmodified CC BY-NC-ND: never edit, only replace); search, label, apply()
 ├── repairs.py         # On entry setup: linked racket (async_get_racquet: /api/racquets/<slug>, ~6 kB, 404 = removed; never the list) → issues (specs changed / missing: fix flows; unreachable: warning, retry after 1 h)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
 ├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
@@ -76,7 +76,10 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
   button use it, else the latest restring. All logging goes through `async_log_restring()`.
 - Racqix is the integration's only network host. The list (`/api/racquets?mode=minimal`, ~1 MB;
-  the API ignores search/filter params) is fetched only when someone searches. The repairs check
+  the API ignores search/filter params) is downloaded at most once a day, success or not
+  (`attempted` in the store): in the background after HA starts, or on a search. Racqix's Vercel
+  bot protection can answer HA with a 429 challenge; then the last download, else the bundled
+  copy, is searched. Tests patch `async_schedule_refresh` (conftest). The repairs check
   asks for one linked racket (`/api/racquets/<slug>`: other field names, numbers as text; mapped by
   `_DETAIL_FIELDS`). Tests mock both with `aioclient_mock` (`_mock_api` in test_dataset.py).
 - String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring

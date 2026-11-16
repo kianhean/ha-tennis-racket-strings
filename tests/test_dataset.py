@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import json
+from datetime import timedelta
+from typing import Any
+
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
@@ -14,6 +20,8 @@ from custom_components.racket_tracker.dataset import (
     DATASET_URL,
     RACQUET_URL,
     Dataset,
+    async_get_dataset,
+    async_schedule_refresh,
     dataset_specs,
     label,
     model_name,
@@ -160,17 +168,24 @@ async def test_lookup_fills_specs(
 async def test_lookup_skip_no_match_and_offline(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:
-    aioclient_mock.get(DATASET_URL, status=503)
-    result = await _start(hass, lookup="pure aero")
-    assert result["type"] == "form"
-    assert result["errors"] == {"lookup": "cannot_connect"}
+    # Racqix's bot protection: the bundled copy is searched instead
+    aioclient_mock.get(DATASET_URL, status=429)
+    result = await _start(hass, lookup="pure aero 2023")
+    assert result["step_id"] == "pick"
+    assert "(offline copy)" in result["description_placeholders"]["dataset"]
+    assert _list_calls(aioclient_mock) == 1
 
+    # No second download the same day, even after a failure
     aioclient_mock.clear_requests()
     _mock_api(aioclient_mock)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"name": "Aero", "tension_unit": "lbs", "lookup": "zzz"}
     )
     assert result["errors"] == {"lookup": "no_match"}
+    assert _list_calls(aioclient_mock) == 0
 
     # Picking nothing adds the racket without dataset values
     result = await hass.config_entries.flow.async_configure(
@@ -179,6 +194,58 @@ async def test_lookup_skip_no_match_and_offline(
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] == "create_entry"
     assert "dataset_specs" not in result["result"].options
+
+
+async def test_bundled_copy() -> None:
+    """The bundled file is an unmodified Racqix download (CC BY-NC-ND)."""
+    from custom_components.racket_tracker.dataset import BUNDLED_FILE, _parse
+
+    payload = json.loads(BUNDLED_FILE.read_text(encoding="utf-8"))
+    dataset = _parse(payload, None)
+    assert dataset is not None and dataset.downloaded is None
+    assert len(dataset.racquets) == payload["total_racquets"] > 1000
+    assert (BUNDLED_FILE.parent / "racqix_dataset.NOTICE.md").exists()
+
+
+async def test_download_kept_across_restarts(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    _mock_api(aioclient_mock)
+    dataset = await async_get_dataset(hass)
+    assert dataset.downloaded and [r["slug"] for r in dataset.racquets] == [
+        r["slug"] for r in RACQUETS
+    ]
+    await hass.async_block_till_done()
+    stored = hass_storage["racket_tracker.dataset"]["data"]
+    assert stored["payload"] == PAYLOAD and stored["attempted"]
+
+    # A restart (empty memory) uses the stored download without asking again
+    hass.data.pop("racket_tracker_dataset")
+    assert (await async_get_dataset(hass)).racquets == RACQUETS
+    assert _list_calls(aioclient_mock) == 1
+
+    # A day later it downloads again; a failure keeps the last download
+    freezer.tick(timedelta(days=1, seconds=1))
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(DATASET_URL, status=429)
+    dataset = await async_get_dataset(hass)
+    assert _list_calls(aioclient_mock) == 1
+    assert dataset.racquets == RACQUETS and dataset.downloaded
+
+
+async def test_download_after_start(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    _mock_api(aioclient_mock)
+    async_schedule_refresh(hass)  # HA is already running: refreshes now
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _list_calls(aioclient_mock) == 1
+    state = hass.data["racket_tracker_dataset"]
+    assert state.dataset.downloaded
+    assert dt_util.utcnow() - state.attempted < timedelta(minutes=1)
 
 
 async def test_options_lookup_and_unlink(

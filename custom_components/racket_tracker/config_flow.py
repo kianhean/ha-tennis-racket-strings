@@ -239,6 +239,7 @@ class _LookupMixin:
     _matches: list[dict[str, Any]]
     _query: str
     _version: str
+    _offline: bool
 
     async def _async_lookup(self, query: str, errors: dict[str, str]) -> bool:
         """Search for the query; True if there is something to pick from."""
@@ -248,6 +249,7 @@ class _LookupMixin:
             errors[CONF_LOOKUP] = "cannot_connect"
             return False
         self._query, self._version = query, dataset.version
+        self._offline = dataset.downloaded is None
         self._matches = search(dataset, query)
         if not self._matches:
             errors[CONF_LOOKUP] = "no_match"
@@ -275,9 +277,12 @@ class _LookupMixin:
             description_placeholders={
                 "count": str(len(options)),
                 "query": self._query,
-                "dataset": f"{DATASET_NAME} v{self._version}"
-                if self._version
-                else DATASET_NAME,
+                "dataset": (
+                    f"{DATASET_NAME} v{self._version}"
+                    if self._version
+                    else DATASET_NAME
+                )
+                + (" (offline copy)" if self._offline else ""),
             },
         )
 

@@ -209,8 +209,15 @@ stiffness** from the [Racqix Tennis Racquet Dataset](https://www.racqix.com/en/t
  Not every racket has every value; swingweight is
 listed for roughly 40% of them.
 
-- The list is downloaded from racqix.com only when you search, and kept in memory for a day. Nothing
-  about you or your rackets is sent.
+- The list is downloaded from racqix.com at most once a day (in the background after Home
+  Assistant starts) and kept in `.storage`, so restarts don't download it again. Nothing about you
+  or your rackets is sent.
+- If it can't be downloaded (Racqix's bot protection sometimes answers Home Assistant with
+  `429 Too Many Requests`), Strung searches the last download, or else the copy that ships with
+  the integration ([`racqix_dataset.json`](custom_components/racket_tracker/racqix_dataset.json),
+  v2026.1, an unmodified copy under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/),
+  [notice](custom_components/racket_tracker/racqix_dataset.NOTICE.md)). The pick step then says
+  "offline copy".
 - Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
 - To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
 - When a linked racket is set up (at startup, or after a change), Strung checks it against the

@@ -1,0 +1,4 @@
+{
+  "comment": "Strings missing from the bundled CC0 list (string_catalog.json). Same format: [brand, model, string type]. Add newer strings here once their material is confirmed.",
+  "strings": []
+}

@@ -1,8 +1,9 @@
 """Look up known rackets in the Racqix Tennis Racquet Dataset.
 
 https://www.racqix.com/en/tennis-racquet-dataset publishes specs for ~1,250
-rackets as JSON. The list is fetched once (when someone searches it) and kept in
-memory for a day. Matched values go to `options["dataset_specs"]`, the base layer
+rackets as JSON. The API has no search, so the list is fetched when someone
+searches it, and kept in memory for a day. Checking an already linked racket
+asks for that racket only (async_get_racquet). Matched values go to `options["dataset_specs"]`, the base layer
 under the user's own measurements (see specs.effective_specs).
 """
 
@@ -14,6 +15,7 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 from homeassistant.core import HomeAssistant
@@ -25,6 +27,8 @@ from .specs import CONF_DATASET_SPECS, SPECS
 _LOGGER = logging.getLogger(__name__)
 
 DATASET_URL = "https://www.racqix.com/api/racquets?mode=minimal"
+# One racket (~6 kB); 404 when it isn't in the dataset
+RACQUET_URL = "https://www.racqix.com/api/racquets/{slug}"
 DATASET_NAME = "Racqix Tennis Racquet Dataset"
 ATTRIBUTION = f"Specs from the {DATASET_NAME} (racqix.com)"
 
@@ -34,6 +38,21 @@ MAX_MATCHES = 50
 _CACHE_SECONDS = 24 * 3600
 _TIMEOUT = aiohttp.ClientTimeout(total=20)
 _DATA_KEY = "racket_tracker_dataset"
+_RACQUET_KEY = "racket_tracker_racquets"
+
+# Single-racket field -> the list's (minimal) field, so both read the same way
+_DETAIL_FIELDS = {
+    "slug": "slug",
+    "brand": "brand",
+    "model": "model",
+    "year": "year",
+    "specs_weight_unstrung_g": "weight",
+    "specs_balance_unstrung_mm": "balance_mm",
+    "advanced_swingweight": "swingweight",
+    "specs_stiffness_ra": "ra",
+    "specs_head_size_in": "head_size",
+    "specs_string_pattern": "string_pattern",
+}
 
 # Dataset field -> our spec key
 _SPEC_FIELDS = {
@@ -84,6 +103,40 @@ async def async_get_dataset(hass: HomeAssistant) -> Dataset:
     )
     hass.data[_DATA_KEY] = (time.monotonic(), dataset)
     return dataset
+
+
+async def async_get_racquet(hass: HomeAssistant, slug: str) -> dict[str, Any] | None:
+    """One racket from the dataset, or None if it was removed.
+
+    Asks for that racket only, not the whole list (the repairs check uses it).
+    The answer is kept for a day. Raises DatasetError if it can't be fetched.
+    """
+    cache: dict[str, tuple[float, dict[str, Any] | None]] = hass.data.setdefault(
+        _RACQUET_KEY, {}
+    )
+    if (hit := cache.get(slug)) and time.monotonic() - hit[0] < _CACHE_SECONDS:
+        return hit[1]
+    url = RACQUET_URL.format(slug=quote(slug, safe=""))
+    session = async_get_clientsession(hass)
+    try:
+        async with session.get(url, timeout=_TIMEOUT) as resp:
+            if resp.status == 404:
+                racquet = None
+            else:
+                resp.raise_for_status()
+                payload = await resp.json(content_type=None)
+                if not isinstance(payload, dict) or not payload.get("slug"):
+                    raise ValueError("unexpected response")
+                # Some keys come with a stray "\r"
+                fields = {str(k).strip(): v for k, v in payload.items()}
+                racquet = {
+                    ours: fields.get(theirs) for theirs, ours in _DETAIL_FIELDS.items()
+                }
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as err:
+        _LOGGER.warning("Couldn't fetch %s: %r", url, err)
+        raise DatasetError(str(err)) from err
+    cache[slug] = (time.monotonic(), racquet)
+    return racquet
 
 
 def _tokens(text: str) -> list[str]:

@@ -103,6 +103,18 @@ class RacketHistory:
         await self._async_commit()
         return new
 
+    async def async_add_many(self, records: list[dict[str, Any]]) -> int:
+        """Add several restrings (an import) with one save; returns the count."""
+        now = dt_util.utcnow().isoformat()
+        for record in records:
+            self.restrings.append(
+                {"id": record.pop("id", None) or new_restring_id(), "created": now}
+                | record
+            )
+        if records:
+            await self._async_commit()
+        return len(records)
+
     async def async_update(
         self, restring_id: str, changes: dict[str, Any]
     ) -> dict[str, Any] | None:

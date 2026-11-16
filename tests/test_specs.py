@@ -39,6 +39,8 @@ async def test_specs_from_config_flow(hass: HomeAssistant) -> None:
     assert float(weight.state) == 321.5
     assert weight.attributes["unit_of_measurement"] == "g"
     assert weight.attributes["source"] == "measured"
+    # The number selector makes 325 a float; it still shows as 325
+    assert hass.states.get("sensor.blade_swingweight").state == "325"
     assert (
         hass.states.get("sensor.blade_stiffness").attributes["unit_of_measurement"]
         == "RA"

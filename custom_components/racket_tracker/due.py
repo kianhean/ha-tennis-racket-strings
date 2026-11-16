@@ -80,7 +80,7 @@ def next_due(record: dict[str, Any] | None, options: Mapping[str, Any]) -> Due |
     if not record or not record.get(ATTR_DATE):
         return None
     rules = due_rules(options)
-    settings = play_settings(options)
+    settings = play_settings(options, record)
     candidates: list[tuple[int, str]] = []
     if (days := rules.get(CONF_DUE_DAYS)) is not None:
         candidates.append((int(days), CONF_DUE_DAYS))

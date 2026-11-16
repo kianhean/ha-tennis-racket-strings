@@ -39,7 +39,8 @@
 | 🔔 **Restring due**<br>Restring after N days, N hours of play, or when the estimated tension drops to a set value: a [due sensor and a calendar](#restring-due) | 🔁 **Usual setup**<br>Save your usual string job and [log it in one tap](#usual-setup) | 📅 **Calendar**<br>Every restring, and the next one due, in HA's calendar |
 | 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, that you can calibrate with a measurement |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
-| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The only network request is the optional racket lookup |
+| 🧶 **String suggestions**<br>Pick from [~780 strings](#string-suggestions) or type your own; the string's material sets the tension estimate | 💥 **Breakages and string life**<br>[One tap when strings break](#when-strings-break); average string life, breakage rate, spend this year, cost per hour and your favourite setup | 💾 **Import and export**<br>[CSV in and out](#import-and-export): back up, or bring your restring spreadsheet |
+| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
 
 ## Installation
 
@@ -132,6 +133,27 @@ data:
     media_content_type: image/jpeg
 ```
 
+### String suggestions
+
+The string fields in **Add restring**, **Update restring** and the racket's **Usual setup** suggest
+strings as you type: first the ones you've already logged, then a built-in list of about 780
+strings with their material. Pick one or type anything; a string that isn't on the list is fine.
+
+The list is the [Tennis Racquets and Strings Dataset](https://github.com/LukeBatten17/tennis-racquets-and-strings-dataset)
+(CC0, July 2024), so newer strings may be missing. PRs that add them to
+[`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json), with
+their material, are welcome. It ships with the integration, so nothing is downloaded. When the
+racket has no string type set, the [tension estimate](#estimated-tension) uses the material of the
+current main string from this list (gauge and brand don't need to match: "Hyper-G 1.25" finds
+Solinco Hyper-G).
+
+### When strings break
+
+Press **Strings broke** (`button.<racket>_strings_broke`) and the current restring gets today's
+`broken_date`. For another day, or to undo it, use `racket_tracker.update_restring` with
+`broken: true` and `broken_date`, or `broken: false`. `add_restring` takes `broken_date` too, for
+logging old restrings. Breakages feed the [string life sensors](#string-life-and-costs).
+
 ### Photos
 
 Each restring can have **one photo**.
@@ -190,6 +212,12 @@ listed for roughly 40% of them.
   about you or your rackets is sent.
 - Looked-up sensors have `source: dataset` and credit the dataset in their `attribution`.
 - To stop using the dataset values for a racket, turn off **Use looked-up specs** under **Configure**.
+- When a linked racket is set up (at startup, or after a change), Strung checks it against the
+  dataset and raises a **repair** under **Settings → System → Repairs** if the dataset changed
+  its specs (fix: take the new values; your measurements still win), if the racket is no longer
+  in it (fix: unlink and keep the specs), or if the dataset can't be reached (the specs keep
+  working). This asks racqix.com for that one racket only (not the whole list), at most once a day, and
+  at most once an hour after a failure.
 
 ## Estimated tension
 
@@ -217,6 +245,16 @@ play costs most in the first hours: each doubling of the hours played costs as m
 | Loss per tenfold age | 4 % | 2 % | 1.5 % |
 
 Leave the three rates empty to use the string type's values. For a hybrid, pick the mains' type.
+Without a string type, the current main string's material from the
+[built-in string list](#string-suggestions) is used, else polyester; the estimate's
+`string_type_source` attribute says which (`racket`, `string` or `default`).
+
+**Your string's own tension loss.** Tennis Warehouse University's
+String Performance Database (on its website) lists a
+measured **Tension Loss (%)** for hundreds of strings. Enter your usual main string's value as
+**String's tension loss in the TWU database** and the string type's rates are scaled by how it
+compares with the median for that type (polyester 41 %, nylon 21 %, gut 15 %): a polyester at
+30 % loses 30/41 of the polyester defaults. Rates you type in, or calibrate, still win.
 
 Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours played:
 10 % + 4 % × log10(14) + 3 % × log2(9) = 24 % lost, about **39.5 lbs** now.
@@ -255,7 +293,7 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
   gives that shape. The 3 % first-hour default gives about 9.5 % after 8 hours.
 - **Materials.** "Natural gut has one of the lowest rates of tension loss … while all polyester
   strings lose tension rapidly" (Cross et al. 2000). "Polyester loses more than nylon which loses
-  more than gut" ([Lindsey, TWU 2013](https://twu.tennis-warehouse.com/learning_center/deadstrings.php)).
+  more than gut" (Lindsey, "How Tennis Strings Go Dead", Tennis Warehouse University, 2013).
   The nylon and gut rates scale polyester's by roughly the ratio of the median losses in
   Tennis Warehouse University's string database: polyester 41 %, nylon 21 %, gut 15 %
   ([summary](https://thetennisindex.com/guides/compendium/string-types)).
@@ -267,10 +305,51 @@ loss** (%) and **Hours played**. Clear the hours to remove them.
 **Limits.** These are averages from a few lab strings, not your string in your climate; play
 intensity and temperature matter too. And tension isn't the whole story: strings feel "dead"
 mostly because the stringbed gets softer and the strings stop sliding back, not because of
-tension loss ([Lindsey, TWU 2013](https://twu.tennis-warehouse.com/learning_center/deadstrings.php);
-[part 2](https://twu.tennis-warehouse.com/learning_center/deadstringsPart2.php)). For polyester, a
+tension loss (Lindsey, "How Tennis Strings Go Dead", parts 1 and 2, Tennis Warehouse University,
+2013). For polyester, a
 [restring rule](#restring-due) on days or hours of play is often a better trigger than a tension
 threshold.
+
+## String life and costs
+
+Updated after every restring and at midnight:
+
+| Sensor | State | Attributes |
+|---|---|---|
+| `sensor.<racket>_average_string_life` | `28` d: how long a string bed lasted, until it broke or the next restring | `average_hours_played` (with hours per week), `average_days_to_break` |
+| `sensor.<racket>_string_breakages` | `2` | `breakage_rate` (% of finished string beds), `last_broken` |
+| `sensor.<racket>_string_cost_this_year` | `135` (your currency) | `restrings_this_year` |
+| `sensor.<racket>_string_cost_per_hour` | `1.20` (currency/h): spend since the first restring per estimated hour played | Only with hours per week |
+| `sensor.<racket>_most_used_setup` | `Hyper-G 1.25 / VS Touch 1.30` | `string_counts` |
+| `sensor.<racket>_best_rated_setup` | `RPM Blast 1.25` (best average rating) | `average_rating`, `ratings` |
+
+The current strings count toward string life only once they've broken. `get_history` returns the
+same numbers under `stats`.
+
+## Import and export
+
+`racket_tracker.export_history` saves the history of one racket (or all of them) as CSV in
+`/config/racket_tracker/exports/`, and returns the file path and the CSV text. Photos aren't included.
+
+`racket_tracker.import_history` adds restrings from a CSV `file` (in the exports folder,
+or in an [allowed folder](https://www.home-assistant.io/integrations/homeassistant/#allowlist_external_dirs)
+such as `/config/www`) or pasted `csv` text:
+
+```yaml
+action: racket_tracker.import_history
+data:
+  config_entry_id: 01JC...
+  file: /config/racket_tracker/exports/strung-pure-aero-20261116-090000.csv
+```
+
+- Needs `date` (YYYY-MM-DD), `main_string` and `main_tension` columns. Optional: `cross_string`,
+  `cross_tension`, `tension_unit` (kg ↔ lbs is converted), `cost`, `stringer`, `rating`,
+  `broken_date`, `notes`. Spreadsheet headings like *String*, *Tension*, *Price* and *Comments*,
+  semicolons and decimal commas work too.
+- Restrings already logged (same ID, or same date, string and tension) are skipped, so importing
+  twice adds nothing. An all-rackets export only adds the rows for the racket with that name.
+- Every row is checked first: one bad row stops the import with its row number, and nothing is added.
+- No `racket_tracker_restrung` events fire, so blueprints don't announce old restrings.
 
 ## Restring due
 
@@ -422,19 +501,21 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 
 | Entity | State | Attributes |
 |---|---|---|
-| `sensor.<racket>_strings` | `Hyper-G 1.25 / VS Touch 1.30` | `restring_id`, `date`, `main_string`, `cross_string`, `main_tension`, `cross_tension`, `stringer`, `rating`, `cost`, `notes`, `image_url` |
+| `sensor.<racket>_strings` | `Hyper-G 1.25 / VS Touch 1.30` | `restring_id`, `date`, `main_string`, `cross_string`, `main_tension`, `cross_tension`, `stringer`, `rating`, `cost`, `notes`, `broken_date`, `image_url` |
 | `sensor.<racket>_tension` | `52` lbs | `cross_tension`. Has long-term statistics |
 | `sensor.<racket>_last_restrung` | `2026-11-15` | |
 | `sensor.<racket>_days_since_restring` | `12` d | Updated at midnight |
 | `sensor.<racket>_restrings` | `7` | `history`: every restring, newest first (not stored in the recorder) |
 | `sensor.<racket>_total_string_cost` | `6650` (your currency) | `average_cost` |
-| `sensor.<racket>_estimated_tension` | `39.5` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, `string_type` and rates. Only with [hours per week](#estimated-tension) |
+| `sensor.<racket>_estimated_tension` | `39.5` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, `string_type`, `string_type_source`, `twu_tension_loss` and rates. Only with [hours per week](#estimated-tension) |
 | `sensor.<racket>_estimated_tension_loss` | `24` % | play settings |
 | `sensor.<racket>_hours_played` | `8` h | Since the latest restring |
 | `sensor.<racket>_next_restring` | `2027-01-14` | Only with a [restring rule](#restring-due) |
 | `binary_sensor.<racket>_restring_due` | on (Due) / off | `due_date`, `days_until_due`, `reason`. Only with a restring rule |
 | `calendar.<racket>_restrings` | on during a restring / due day | Events: every restring and the next one due |
 | `button.<racket>_restring_with_usual_setup` | time last pressed | Logs the [usual setup](#usual-setup) for today |
+| `button.<racket>_strings_broke` | time last pressed | Marks the current strings [broken](#when-strings-break) today |
+| `sensor.<racket>_average_string_life`, `_string_breakages`, `_string_cost_this_year`, `_string_cost_per_hour`, `_most_used_setup`, `_best_rated_setup` | see [String life and costs](#string-life-and-costs) | |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |
 | `sensor.<racket>_<spec>` | see [Racket specs](#racket-specs) | `source`: `measured` / `dataset` |
 
@@ -445,9 +526,11 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `racket_tracker.add_restring` | Log a restring | Optional: the new restring, including its `id` |
 | `racket_tracker.calibrate_tension` | Scale the tension estimate to a measured mains tension | Optional: the new rates |
 | `racket_tracker.repeat_restring` | Log a restring with the usual setup, or copy a past one (`restring_id`) | Optional: the new restring |
-| `racket_tracker.update_restring` | Change any field; add, replace or remove the photo. **Leave `restring_id` empty to edit the latest restring.** | Optional: the updated restring |
+| `racket_tracker.update_restring` | Change any field; add, replace or remove the photo; mark the strings broken (`broken`, `broken_date`). **Leave `restring_id` empty to edit the latest restring.** | Optional: the updated restring |
 | `racket_tracker.delete_restring` | Delete a restring and its photo | — |
-| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `restrings[]` |
+| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]` |
+| `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv` |
+| `racket_tracker.import_history` | Add restrings from a CSV file or text ([details](#import-and-export)) | Optional: `imported`, `skipped_duplicates`, `skipped_other_rackets` |
 
 Restring IDs are in the `history` attribute and in the action responses.
 
@@ -460,6 +543,8 @@ and every restring field, including `image_url`.
 
 - **"Couldn't use that image"**: pick the photo from **My media** (local media), or give a path
   inside `allowlist_external_dirs`. Photos must be under 20 MB.
+- **"Row N of the CSV"**: the import stopped at that row (nothing was added). Dates must be
+  YYYY-MM-DD; tensions 1–100; ratings 1–5.
 - **The specs section or photo field is missing**: update to Home Assistant 2025.7 or newer.
 - **Something looks wrong**: on the racket, **⋮ → Download diagnostics** gives its options,
   specs and full history. Attach it to an [issue](https://github.com/kianhean/ha-tennis-racket-strings/issues).
@@ -475,7 +560,7 @@ ruff check custom_components/ tests/ && ruff format custom_components/ tests/
 Every test loads the integration into a real Home Assistant (via
 `pytest-homeassistant-custom-component`). CI runs them on the minimum supported version (2025.7),
 current stable and the newest beta. They cover the config and options flows (including over HTTP),
-every action, photos, specs, the sensors, the blueprints, the example scripts and dashboard, and
+every action, photos, specs, the sensors, import and export, repairs, the string list, the blueprints, the example scripts and dashboard, and
 the translations.
 
 Releases are automatic: bump `version` in `custom_components/racket_tracker/manifest.json` in your

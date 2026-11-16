@@ -12,19 +12,23 @@ custom_components/racket_tracker/
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: fetch (cached 1 day), search, label, apply() → options
+├── repairs.py         # On entry setup: linked racket (async_get_racquet: /api/racquets/<slug>, ~6 kB, 404 = removed; never the list) → issues (specs changed / missing: fix flows; unreachable: warning, retry after 1 h)
+├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
+├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
+├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served) and import (parse_csv: validate all rows, skip duplicates)
 ├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
 ├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
 ├── specs.py           # SPECS definitions; effective_specs() merges dataset_specs < specs (user wins)
 ├── config_flow.py     # Add racket (name, optional lookup → "pick" step, details, collapsible play/due/setup/specs); options flow edits them; reconfigure renames
 ├── entity.py          # racket_device_info(entry), DailyRacketEntity (history + midnight), async_remove_entity
-├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), next_restring (only with due rules), one RacketSpecSensor per spec
+├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), StatsSensors (cost_per_hour only with hours/week), next_restring (only with due rules), one RacketSpecSensor per spec
 ├── binary_sensor.py   # restring_due (only with due rules)
 ├── calendar.py        # calendar.<racket>_restrings: all-day event per restring + next due
-├── button.py          # Restring with usual setup → usual_setup() + async_log_restring()
+├── button.py          # Restring with usual setup → usual_setup() + async_log_restring(); Strings broke → async_mark_broken()
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
-├── services.yaml      # add_restring, repeat_restring, calibrate_tension, update_restring, delete_restring, get_history
+├── services.yaml      # add_restring, repeat_restring, calibrate_tension, update_restring, delete_restring, get_history, export_history, import_history
 ├── icons.json         # Entity + action icons (no _attr_icon in code)
 ├── strings.json       # Source strings; translations/en.json must be identical
 ├── quality_scale.yaml # Self-assessment; keep it honest
@@ -43,7 +47,9 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   (`date`, `created`); `latest` is the last one. Dates are ISO strings.
 - Record fields: `id`, `created`, `updated`, `date`, `main_string`, `cross_string`,
   `main_tension`, `cross_tension`, `tension_unit`, `cost`, `stringer`, `rating`, `notes`, `image`
-  (stored file name). `with_image_url()` adds `image_url` for attributes, events and responses.
+  (stored file name), `broken_date` (strings broke; never before `date`). `with_image_url()` adds
+  `image_url` for attributes, events and responses. `update_restring` takes `broken` (true: today or
+  `broken_date`; false: clears).
 - `add_restring` defaults `cross_string`/`cross_tension` to the mains and the date to today.
   Whole-number tensions/costs are stored as ints (`_whole`).
 - `update_restring` without `restring_id` edits the latest restring.
@@ -52,8 +58,12 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
   `dataset_racket` (`slug`, `name`, `version`). The options flow keeps both unless "Use looked-up
   specs" is turned off. Dataset details only fill brand/model/head size/pattern the user left
   blank. Changing options reloads the entry.
-- `play` (optional section): `hours_per_week`, `string_type` (polyester/nylon/gut presets) and
-  optional overrides `initial_tension_loss`, `first_hour_loss`, `relaxation_loss`.
+- `play` (optional section): `hours_per_week`, `string_type` (polyester/nylon/gut presets),
+  `twu_tension_loss` (the string's TWU "Tension Loss (%)": scales the preset by value / median of the
+  type, `TWU_MEDIAN_LOSS`) and optional overrides `initial_tension_loss`, `first_hour_loss`,
+  `relaxation_loss`. `play_settings(options, record)`: without `string_type`, the record's main
+  string's material from the string catalog, else polyester (`string_type_source`). Pass the
+  restring whose estimate you want (backfill does it per record).
   loss = initial + relaxation·log10(days) + first_hour·log2(1 + hours), capped at 50 %. The
   model and its presets are cited in `tension.py` and README "Where the numbers come from"; keep
   both in sync. `calibrate_tension` scales all three rates to a measured tension. Entry minor
@@ -65,8 +75,15 @@ tests/                 # All tests run against a real HA via pytest-homeassistan
 - `setup` (optional section): the usual `main_string`, `main_tension`, `cross_string`,
   `cross_tension`, `stringer`, `cost` (needs main string + tension). `repeat_restring` and the
   button use it, else the latest restring. All logging goes through `async_log_restring()`.
-- The dataset (`https://www.racqix.com/api/racquets?mode=minimal`) is the integration's only
-  network request; tests mock it with `aioclient_mock`.
+- Racqix is the integration's only network host. The list (`/api/racquets?mode=minimal`, ~1 MB;
+  the API ignores search/filter params) is fetched only when someone searches. The repairs check
+  asks for one linked racket (`/api/racquets/<slug>`: other field names, numbers as text; mapped by
+  `_DETAIL_FIELDS`). Tests mock both with `aioclient_mock` (`_mock_api` in test_dataset.py).
+- String suggestions: `async_update_string_suggestions()` re-registers the add/update_restring
+  descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
+  main/cross string: used strings first, then the catalog. Runs on setup and history changes.
+  Stats sensor names must not end in "strings": dashboards find rackets by `sensor.*_strings`.
+- Import fires no `restrung` events. Duplicates: same `id`, or same date + main string + tension.
 
 ## Photos
 
@@ -114,3 +131,6 @@ makes `release.yml` tag `v<version>`, create the GitHub release and attach `rack
 - Platforms use `AddConfigEntryEntitiesCallback`.
 - User-facing errors are `ServiceValidationError` with translation keys under `exceptions`.
 - README images and examples must show only what HA really renders from built-in cards.
+- Cite Tennis Warehouse / TWU as plain text, never as links: their terms of use forbid linking
+  without written permission, and copying or data mining their content. Don't bundle or fetch TWU data;
+  users type values in (`twu_tension_loss`).

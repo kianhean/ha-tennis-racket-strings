@@ -11,6 +11,9 @@
     "button": {
       "repeat_restring": {
         "default": "mdi:repeat"
+      },
+      "strings_broke": {
+        "default": "mdi:link-variant-off"
       }
     },
     "calendar": {
@@ -82,6 +85,24 @@
       },
       "tension_max": {
         "default": "mdi:arrow-expand-horizontal"
+      },
+      "string_life": {
+        "default": "mdi:timer-outline"
+      },
+      "breakages": {
+        "default": "mdi:link-variant-off"
+      },
+      "cost_this_year": {
+        "default": "mdi:cash-clock"
+      },
+      "cost_per_hour": {
+        "default": "mdi:cash-fast"
+      },
+      "most_used_string": {
+        "default": "mdi:counter"
+      },
+      "best_rated_string": {
+        "default": "mdi:star"
       }
     }
   },
@@ -103,6 +124,12 @@
     },
     "get_history": {
       "service": "mdi:history"
+    },
+    "export_history": {
+      "service": "mdi:file-export"
+    },
+    "import_history": {
+      "service": "mdi:file-import"
     }
   }
 }

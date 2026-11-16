@@ -34,6 +34,9 @@ ATTR_NOTES = "notes"
 ATTR_IMAGE = "image"
 ATTR_IMAGE_URL = "image_url"
 ATTR_REMOVE_IMAGE = "remove_image"
+# The date this string bed broke (None if it didn't)
+ATTR_BROKEN_DATE = "broken_date"
+ATTR_BROKEN = "broken"
 
 EDITABLE_FIELDS = (
     ATTR_DATE,
@@ -45,6 +48,7 @@ EDITABLE_FIELDS = (
     ATTR_STRINGER,
     ATTR_RATING,
     ATTR_NOTES,
+    ATTR_BROKEN_DATE,
 )
 
 # Fields a repeated restring copies from the usual setup or a past restring
@@ -64,6 +68,8 @@ SERVICE_DELETE_RESTRING = "delete_restring"
 SERVICE_GET_HISTORY = "get_history"
 SERVICE_REPEAT_RESTRING = "repeat_restring"
 SERVICE_CALIBRATE_TENSION = "calibrate_tension"
+SERVICE_EXPORT_HISTORY = "export_history"
+SERVICE_IMPORT_HISTORY = "import_history"
 
 # Events
 EVENT_RESTRUNG = f"{DOMAIN}_restrung"

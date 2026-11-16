@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 
 from . import RacketConfigEntry
 from .const import (
+    ATTR_BROKEN_DATE,
     ATTR_COST,
     ATTR_CROSS_STRING,
     ATTR_CROSS_TENSION,
@@ -40,7 +41,21 @@ from .due import due_rules, next_due
 from .entity import DailyRacketEntity, async_remove_entity, racket_device_info
 from .history import RacketHistory, with_image_url
 from .specs import SOURCE_DATASET, SPECS, Spec, effective_specs, spec_unit
-from .tension import Estimate, estimate, play_settings
+from .stats import (
+    average_days_to_break,
+    average_life_days,
+    best_rated_string,
+    breakage_rate,
+    breakages,
+    cost_in_year,
+    cost_per_hour,
+    last_broken,
+    most_used_string,
+    restrings_in_year,
+    string_counts,
+    strings_label,
+)
+from .tension import Estimate, PlaySettings, estimate, play_settings
 
 
 def _latest(history: RacketHistory, key: str) -> Any:
@@ -53,11 +68,7 @@ def _last_date(history: RacketHistory) -> date | None:
 
 
 def _strings_label(history: RacketHistory) -> str | None:
-    main = _latest(history, ATTR_MAIN_STRING)
-    cross = _latest(history, ATTR_CROSS_STRING)
-    if main is None:
-        return None
-    return main if not cross or cross == main else f"{main} / {cross}"
+    return strings_label(history.latest) if history.latest else None
 
 
 def _days_since(history: RacketHistory) -> int | None:
@@ -80,6 +91,7 @@ def _latest_attrs(history: RacketHistory) -> dict[str, Any]:
         ATTR_RATING: r.get(ATTR_RATING),
         ATTR_COST: r.get(ATTR_COST),
         ATTR_NOTES: r.get(ATTR_NOTES),
+        ATTR_BROKEN_DATE: r.get(ATTR_BROKEN_DATE),
         "image_url": r.get("image_url"),
     }
 
@@ -184,6 +196,105 @@ PLAY_SENSORS: tuple[PlaySensorDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class StatsSensorDescription(SensorEntityDescription):
+    """A statistic over the whole history; may need hours of play per week."""
+
+    value_fn: Callable[[list[dict[str, Any]], PlaySettings | None, date], Any]
+    attrs_fn: (
+        Callable[[list[dict[str, Any]], PlaySettings | None, date], dict[str, Any]]
+        | None
+    ) = None
+    currency_unit: str | None = None  # "" for the currency, "/h" per hour
+    needs_play: bool = False
+
+
+def _life_attrs(
+    records: list[dict[str, Any]], settings: PlaySettings | None, _today: date
+) -> dict[str, Any]:
+    life = average_life_days(records)
+    return {
+        "average_hours_played": round(life * settings.hours_per_week / 7, 1)
+        if settings is not None and life is not None
+        else None,
+        "average_days_to_break": average_days_to_break(records),
+    }
+
+
+def _most_used(records: list[dict[str, Any]], *_: Any) -> str | None:
+    most = most_used_string(records)
+    return most[0] if most else None
+
+
+def _best_rated(records: list[dict[str, Any]], *_: Any) -> str | None:
+    best = best_rated_string(records)
+    return best[0] if best else None
+
+
+def _best_rated_attrs(records: list[dict[str, Any]], *_: Any) -> dict[str, Any]:
+    best = best_rated_string(records)
+    return {
+        "average_rating": best[1] if best else None,
+        "ratings": best[2] if best else 0,
+    }
+
+
+STATS_SENSORS: tuple[StatsSensorDescription, ...] = (
+    StatsSensorDescription(
+        key="string_life",
+        translation_key="string_life",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        suggested_unit_of_measurement=UnitOfTime.DAYS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda r, *_: average_life_days(r),
+        attrs_fn=_life_attrs,
+    ),
+    StatsSensorDescription(
+        key="breakages",
+        translation_key="breakages",
+        value_fn=lambda r, *_: breakages(r),
+        attrs_fn=lambda r, *_: {
+            "breakage_rate": breakage_rate(r),
+            "last_broken": last_broken(r),
+        },
+    ),
+    StatsSensorDescription(
+        key="cost_this_year",
+        translation_key="cost_this_year",
+        device_class=SensorDeviceClass.MONETARY,
+        suggested_display_precision=2,
+        currency_unit="",
+        value_fn=lambda r, _s, today: cost_in_year(r, today.year),
+        attrs_fn=lambda r, _s, today: {
+            "restrings_this_year": restrings_in_year(r, today.year)
+        },
+    ),
+    StatsSensorDescription(
+        key="cost_per_hour",
+        translation_key="cost_per_hour",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        currency_unit="/h",
+        needs_play=True,
+        value_fn=lambda r, s, today: cost_per_hour(r, s, today) if s else None,
+    ),
+    StatsSensorDescription(
+        key="most_used_string",
+        translation_key="most_used_string",
+        value_fn=_most_used,
+        attrs_fn=lambda r, *_: {"string_counts": string_counts(r)},
+    ),
+    StatsSensorDescription(
+        key="best_rated_string",
+        translation_key="best_rated_string",
+        value_fn=_best_rated,
+        attrs_fn=_best_rated_attrs,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: RacketConfigEntry,
@@ -207,6 +318,13 @@ async def async_setup_entry(
                 registry.async_remove(entity_id)
     else:
         async_add_entities(PlaySensor(entry, desc) for desc in PLAY_SENSORS)
+
+    has_play = play_settings(entry.options) is not None
+    for stat in STATS_SENSORS:
+        if stat.needs_play and not has_play:
+            async_remove_entity(hass, Platform.SENSOR, entry, stat.key)
+        else:
+            async_add_entities([StatsSensor(hass, entry, stat)])
 
     # One sensor per spec that has a value; drop sensors for specs since cleared.
     specs = effective_specs(entry)
@@ -296,7 +414,11 @@ class RacketSpecSensor(SensorEntity):
             self._attr_suggested_unit_of_measurement = (
                 self._attr_native_unit_of_measurement
             )
-        self._attr_native_value = value["value"]
+        native = value["value"]
+        # The form stores 320 as 320.0; show it as 320, like looked-up values
+        if isinstance(native, float) and native.is_integer():
+            native = int(native)
+        self._attr_native_value = native
         self._attr_extra_state_attributes = {"source": value["source"]}
         if value["source"] == SOURCE_DATASET:
             self._attr_attribution = ATTRIBUTION
@@ -315,7 +437,7 @@ class PlaySensor(SensorEntity):
         """Initialize the sensor."""
         self.entity_description = description
         self._history = entry.runtime_data
-        self._settings = play_settings(entry.options)
+        self._options = entry.options
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = racket_device_info(entry)
         if description.racket_unit:
@@ -338,8 +460,14 @@ class PlaySensor(SensorEntity):
     def _handle_midnight(self, _now: datetime) -> None:
         self.async_write_ha_state()
 
+    @property
+    def _settings(self) -> PlaySettings:
+        """Settings for the current strings (their material may differ)."""
+        settings = play_settings(self._options, self._history.latest)
+        assert settings is not None
+        return settings
+
     def _estimate(self) -> Estimate | None:
-        assert self._settings is not None
         return estimate(self._history.latest, self._settings, dt_util.now().date())
 
     @property
@@ -352,13 +480,15 @@ class PlaySensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Show the inputs, so the estimate can be checked."""
-        assert self._settings is not None
+        settings = self._settings
         attrs: dict[str, Any] = {
-            "hours_per_week": self._settings.hours_per_week,
-            "string_type": self._settings.string_type,
-            "initial_tension_loss": self._settings.rates.initial,
-            "first_hour_loss": self._settings.rates.first_hour,
-            "relaxation_loss": self._settings.rates.relaxation,
+            "hours_per_week": settings.hours_per_week,
+            "string_type": settings.string_type,
+            "string_type_source": settings.string_type_source,
+            "twu_tension_loss": settings.twu_tension_loss,
+            "initial_tension_loss": settings.rates.initial,
+            "first_hour_loss": settings.rates.first_hour,
+            "relaxation_loss": settings.rates.relaxation,
         }
         if self.entity_description.key == "estimated_tension":
             est = self._estimate()
@@ -379,3 +509,44 @@ class NextRestringSensor(DailyRacketEntity, SensorEntity):
         """Return the due date."""
         due = next_due(self._history.latest, self._entry.options)
         return due.date if due else None
+
+
+class StatsSensor(DailyRacketEntity, SensorEntity):
+    """String life, breakages, costs and favourite strings over the history."""
+
+    entity_description: StatsSensorDescription
+    # Per-string counts can grow long; keep them out of the database
+    _unrecorded_attributes = frozenset({"string_counts"})
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: RacketConfigEntry,
+        description: StatsSensorDescription,
+    ) -> None:
+        """Initialize."""
+        super().__init__(entry, description.key)
+        self.entity_description = description
+        if description.currency_unit is not None:
+            self._attr_native_unit_of_measurement = (
+                f"{hass.config.currency}{description.currency_unit}"
+            )
+
+    def _args(self) -> tuple[list[dict[str, Any]], PlaySettings | None, date]:
+        return (
+            self._history.restrings,
+            play_settings(self._entry.options, self._history.latest),
+            dt_util.now().date(),
+        )
+
+    @property
+    def native_value(self) -> Any:
+        """Return the statistic."""
+        return self.entity_description.value_fn(*self._args())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the details."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(*self._args())

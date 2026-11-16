@@ -69,6 +69,10 @@ add_restring:
         media:
           accept:
             - image/*
+    broken_date:
+      required: false
+      selector:
+        date:
 
 repeat_restring:
   fields:
@@ -205,6 +209,14 @@ update_restring:
       default: false
       selector:
         boolean:
+    broken:
+      required: false
+      selector:
+        boolean:
+    broken_date:
+      required: false
+      selector:
+        date:
 
 delete_restring:
   fields:
@@ -225,3 +237,30 @@ get_history:
       selector:
         config_entry:
           integration: racket_tracker
+
+export_history:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: racket_tracker
+
+import_history:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    file:
+      required: false
+      example: "/config/racket_tracker/exports/strung-pure-aero-20261116-090000.csv"
+      selector:
+        text:
+    csv:
+      required: false
+      example: "date,main_string,main_tension\n2026-01-10,Hyper-G 1.25,52"
+      selector:
+        text:
+          multiline: true

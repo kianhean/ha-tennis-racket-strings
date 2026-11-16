@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from datetime import date
 from typing import Any
 
@@ -19,11 +20,16 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service import async_set_service_schema
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from homeassistant.util import dt as dt_util
+from homeassistant.util.yaml import load_yaml_dict
 
 from .backfill import async_backfill
 from .const import (
+    ATTR_BROKEN,
+    ATTR_BROKEN_DATE,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_COST,
     ATTR_CROSS_STRING,
@@ -45,20 +51,31 @@ from .const import (
     SERVICE_ADD_RESTRING,
     SERVICE_CALIBRATE_TENSION,
     SERVICE_DELETE_RESTRING,
+    SERVICE_EXPORT_HISTORY,
     SERVICE_GET_HISTORY,
+    SERVICE_IMPORT_HISTORY,
     SERVICE_REPEAT_RESTRING,
     SERVICE_UPDATE_RESTRING,
     SETUP_FIELDS,
     TENSION_UNIT_LBS,
 )
 from .history import RacketHistory, new_restring_id, with_image_url
+from .history_io import (
+    async_read_import,
+    async_write_export,
+    parse_csv,
+    to_csv,
+)
 from .images import (
     IMAGE_URL_PREFIX,
     async_delete_image,
     async_import_image,
     image_dir,
 )
+from .repairs import async_check_dataset, async_delete_racket_issues
 from .specs import effective_specs
+from .stats import summary
+from .string_catalog import suggestions
 from .tension import (
     CONF_FIRST_HOUR_LOSS,
     CONF_INITIAL_LOSS,
@@ -98,6 +115,7 @@ _RESTRING_FIELDS: dict[vol.Marker, Any] = {
     vol.Optional(ATTR_STRINGER): cv.string,
     vol.Optional(ATTR_RATING): _RATING,
     vol.Optional(ATTR_NOTES): cv.string,
+    vol.Optional(ATTR_BROKEN_DATE): cv.date,
     # Media selector value ({media_content_id, ...}), media-source ID or file path
     vol.Optional(ATTR_IMAGE): vol.Any(dict, cv.string),
 }
@@ -118,6 +136,7 @@ UPDATE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_MAIN_STRING): cv.string,
         vol.Optional(ATTR_MAIN_TENSION): _TENSION,
         vol.Optional(ATTR_REMOVE_IMAGE, default=False): cv.boolean,
+        vol.Optional(ATTR_BROKEN): cv.boolean,
         **_RESTRING_FIELDS,
     }
 )
@@ -151,6 +170,26 @@ CALIBRATE_SCHEMA = vol.Schema(
 
 HISTORY_SCHEMA = vol.Schema({vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string})
 
+EXPORT_SCHEMA = vol.Schema({vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string})
+
+IMPORT_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+            vol.Exclusive("file", "source"): cv.string,
+            vol.Exclusive("csv", "source"): cv.string,
+        }
+    ),
+    cv.has_at_least_one_key("file", "csv"),
+)
+
+# Action fields that suggest string names (catalog + strings already used)
+_STRING_FIELDS = {
+    SERVICE_ADD_RESTRING: (ATTR_MAIN_STRING, ATTR_CROSS_STRING),
+    SERVICE_UPDATE_RESTRING: (ATTR_MAIN_STRING, ATTR_CROSS_STRING),
+}
+_DESCRIPTIONS_KEY = f"{DOMAIN}_service_descriptions"
+
 
 def _get_entry(hass: HomeAssistant, entry_id: str) -> RacketConfigEntry:
     entry = hass.config_entries.async_get_entry(entry_id)
@@ -174,6 +213,53 @@ def _serialize(data: dict[str, Any]) -> dict[str, Any]:
     return {k: v.isoformat() if isinstance(v, date) else v for k, v in data.items()}
 
 
+def _check_broken_date(record: dict[str, Any]) -> None:
+    """Strings can't break before they were strung."""
+    broken, strung = record.get(ATTR_BROKEN_DATE), record.get(ATTR_DATE)
+    if broken and strung and broken < strung:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="broken_before_restring",
+            translation_placeholders={"broken": broken, "date": strung},
+        )
+
+
+def used_strings(hass: HomeAssistant) -> list[str]:
+    """Strings logged on any racket, most recent first."""
+    records = [
+        record
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
+        for record in entry.runtime_data.restrings
+    ]
+    records.sort(key=lambda r: r.get(ATTR_DATE, ""), reverse=True)
+    return [
+        name
+        for record in records
+        for name in (record.get(ATTR_MAIN_STRING), record.get(ATTR_CROSS_STRING))
+        if name
+    ]
+
+
+@callback
+def async_update_string_suggestions(hass: HomeAssistant) -> None:
+    """Offer catalog and used strings in the add/update restring forms."""
+    if (base := hass.data.get(_DESCRIPTIONS_KEY)) is None:
+        return
+    selector = {
+        "select": {
+            "options": suggestions(used_strings(hass)),
+            "custom_value": True,
+            "mode": "dropdown",
+            "sort": False,
+        }
+    }
+    for service, fields in _STRING_FIELDS.items():
+        description = copy.deepcopy(base[service])
+        for field in fields:
+            description["fields"][field]["selector"] = selector
+        async_set_service_schema(hass, DOMAIN, service, description)
+
+
 async def async_log_restring(
     hass: HomeAssistant, entry: RacketConfigEntry, fields: dict[str, Any]
 ) -> dict[str, Any]:
@@ -187,14 +273,33 @@ async def async_log_restring(
     data.setdefault(ATTR_CROSS_STRING, data[ATTR_MAIN_STRING])
     data.setdefault(ATTR_CROSS_TENSION, data[ATTR_MAIN_TENSION])
     data["tension_unit"] = entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS)
+    data = _serialize(data)
+    _check_broken_date(data)
 
-    record = await entry.runtime_data.async_add(_serialize(data))
+    record = await entry.runtime_data.async_add(data)
     record = with_image_url(record)
     hass.bus.async_fire(
         EVENT_RESTRUNG,
         {"config_entry_id": entry.entry_id, "racket": entry.title, **record},
     )
     return record
+
+
+async def async_mark_broken(
+    hass: HomeAssistant, entry: RacketConfigEntry, on: date | None = None
+) -> dict[str, Any]:
+    """Record that the current strings broke (today unless given)."""
+    history = entry.runtime_data
+    if (latest := history.latest) is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="no_restrings",
+            translation_placeholders={"racket": entry.title},
+        )
+    broken = (on or dt_util.now().date()).isoformat()
+    _check_broken_date({**latest, ATTR_BROKEN_DATE: broken})
+    record = await history.async_update(latest["id"], {ATTR_BROKEN_DATE: broken})
+    return with_image_url(record or {})
 
 
 def usual_setup(
@@ -254,7 +359,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def calibrate_tension(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
-        if (settings := play_settings(entry.options)) is None:
+        if play_settings(entry.options) is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="no_play_settings",
@@ -266,6 +371,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_key="no_restrings",
                 translation_placeholders={"racket": entry.title},
             )
+        settings = play_settings(entry.options, latest)
+        assert settings is not None
         measured = call.data["tension"]
         on = call.data.get(ATTR_DATE) or dt_util.now().date()
         try:
@@ -313,6 +420,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         changes = _serialize(
             {k: v for k, v in call.data.items() if k in EDITABLE_FIELDS}
         )
+        if (broken := call.data.get(ATTR_BROKEN)) is not None:
+            changes[ATTR_BROKEN_DATE] = (
+                changes.get(ATTR_BROKEN_DATE) or dt_util.now().date().isoformat()
+                if broken
+                else None
+            )
+        _check_broken_date({**existing, **changes})
         if ATTR_IMAGE in call.data:
             changes[ATTR_IMAGE] = await async_import_image(
                 hass, call.data[ATTR_IMAGE], restring_id
@@ -346,9 +460,52 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "specs": effective_specs(entry),
             "restring_count": history.count,
             "total_cost": history.total_cost,
+            "stats": summary(
+                history.restrings,
+                play_settings(entry.options, history.latest),
+                dt_util.now().date(),
+            ),
             "restrings": history.newest_first(),
         }
         return response
+
+    async def export_history(call: ServiceCall) -> ServiceResponse:
+        if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
+            entries = [_get_entry(hass, entry_id)]
+            name = entries[0].title
+        else:
+            entries = list(hass.config_entries.async_loaded_entries(DOMAIN))
+            name = "all rackets"
+        rows = [
+            (entry.title, record)
+            for entry in entries
+            for record in entry.runtime_data.restrings
+        ]
+        text = to_csv(rows)
+        path = await async_write_export(hass, name, text)
+        return {"file": str(path), "restrings": len(rows), "csv": text}
+
+    async def import_history(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        if file := call.data.get("file"):
+            text = await async_read_import(hass, file)
+        else:
+            text = call.data["csv"]
+        history = entry.runtime_data
+        records, duplicates, other = parse_csv(
+            text,
+            entry.title,
+            entry.options.get(CONF_TENSION_UNIT, TENSION_UNIT_LBS),
+            history.restrings,
+        )
+        # No restrung events: these are old restrings, not new ones
+        imported = await history.async_add_many(records)
+        return {
+            "racket": entry.title,
+            "imported": imported,
+            "skipped_duplicates": duplicates,
+            "skipped_other_rackets": other,
+        }
 
     hass.services.async_register(
         DOMAIN,
@@ -388,6 +545,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         HISTORY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EXPORT_HISTORY,
+        export_history,
+        EXPORT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_IMPORT_HISTORY,
+        import_history,
+        IMPORT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    # services.yaml, kept to rebuild the forms with string suggestions
+    integration = await async_get_integration(hass, DOMAIN)
+    hass.data[_DESCRIPTIONS_KEY] = await hass.async_add_executor_job(
+        load_yaml_dict, str(integration.file_path / "services.yaml")
+    )
+    async_update_string_suggestions(hass)
     return True
 
 
@@ -431,6 +609,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> bo
 
     entry.async_on_unload(history.async_add_listener(_backfill))
     _backfill()
+
+    @callback
+    def _suggest() -> None:
+        async_update_string_suggestions(hass)
+
+    entry.async_on_unload(history.async_add_listener(_suggest))
+    _suggest()
+
+    # Has the looked-up racket changed or gone from the dataset? (repairs.py)
+    entry.async_create_background_task(
+        hass, async_check_dataset(hass, entry), f"{DOMAIN} dataset check"
+    )
     return True
 
 
@@ -450,3 +640,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: RacketConfigEntry) -> N
     for record in history.restrings:
         await async_delete_image(hass, record.get(ATTR_IMAGE))
     await history.async_remove()
+    async_delete_racket_issues(hass, entry.entry_id)

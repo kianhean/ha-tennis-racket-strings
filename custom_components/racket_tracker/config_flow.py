@@ -403,7 +403,7 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
         if self._current and self._loaded:
             await async_set_current_strings(
                 self.hass,
-                self.config_entry,  # type: ignore[arg-type]
+                self.config_entry,
                 self._current,
                 options.get(CONF_TENSION_UNIT),
             )

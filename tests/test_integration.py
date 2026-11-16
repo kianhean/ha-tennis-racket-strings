@@ -319,15 +319,15 @@ async def test_current_strings_in_forms(hass: HomeAssistant) -> None:
 
     async def configure(current: dict) -> None:
         result = await hass.config_entries.options.async_init(entry.entry_id)
+        # The section is prefilled from the latest restring
+        current_section = result["data_schema"].schema["current"]
         suggested = {
-            str(key): key.description["suggested_value"]
-            for key in result["data_schema"].schema
-            if key == "current"
+            str(key): (key.description or {}).get("suggested_value")
+            for key in current_section.schema.schema
         }
-        assert (
-            suggested["current"]["main_string"]
-            == entry.runtime_data.latest["main_string"]
-        )
+        latest = entry.runtime_data.latest
+        assert suggested["main_string"] == latest["main_string"]
+        assert suggested["date"] == latest["date"]
         result = await hass.config_entries.options.async_configure(
             result["flow_id"], {"tension_unit": "lbs", "current": current}
         )

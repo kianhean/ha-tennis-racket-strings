@@ -60,6 +60,7 @@ from .due import (
     PLAY_RULES,
 )
 from .specs import CONF_DATASET_SPECS, CONF_SPECS, SPECS
+from .string_catalog import suggestions
 from .tension import (
     CONF_FIRST_HOUR_LOSS,
     CONF_HOURS_PER_WEEK,
@@ -67,6 +68,7 @@ from .tension import (
     CONF_PLAY,
     CONF_RELAXATION_LOSS,
     CONF_STRING_TYPE,
+    CONF_TWU_LOSS,
     STRING_TYPES,
 )
 
@@ -145,6 +147,8 @@ PLAY_SCHEMA = vol.Schema(
         vol.Optional(CONF_INITIAL_LOSS): _number(0, 40, 0.1, "%"),
         vol.Optional(CONF_FIRST_HOUR_LOSS): _number(0, 20, 0.1, "%"),
         vol.Optional(CONF_RELAXATION_LOSS): _number(0, 20, 0.1, "%"),
+        # "Tension Loss (%)" of the string in TWU's String Performance Database
+        vol.Optional(CONF_TWU_LOSS): _number(1, 90, 0.1, "%"),
     }
 )
 
@@ -158,12 +162,22 @@ DUE_SCHEMA = vol.Schema(
     }
 )
 
+# Type any string, or pick one from the bundled catalog
+STRING_SELECTOR = SelectSelector(
+    SelectSelectorConfig(
+        options=suggestions(),
+        custom_value=True,
+        mode=SelectSelectorMode.DROPDOWN,
+        sort=False,
+    )
+)
+
 # The usual string job, for one-tap restrings (button / repeat_restring).
 SETUP_SCHEMA = vol.Schema(
     {
-        vol.Optional(ATTR_MAIN_STRING): TextSelector(),
+        vol.Optional(ATTR_MAIN_STRING): STRING_SELECTOR,
         vol.Optional(ATTR_MAIN_TENSION): _number(1, 100, 0.5),
-        vol.Optional(ATTR_CROSS_STRING): TextSelector(),
+        vol.Optional(ATTR_CROSS_STRING): STRING_SELECTOR,
         vol.Optional(ATTR_CROSS_TENSION): _number(1, 100, 0.5),
         vol.Optional(ATTR_STRINGER): TextSelector(),
         vol.Optional(ATTR_COST): _number(0, 10000, 0.01),
@@ -351,6 +365,7 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
         """Manage racket details."""
         errors: dict[str, str] = {}
         linked = self.config_entry.options.get(CONF_DATASET_RACKET)
+        looked_up = linked or self.config_entry.options.get(CONF_DATASET_SPECS)
         if user_input is not None:
             data = _clean(user_input, errors)
             query = (data.pop(CONF_LOOKUP, None) or "").strip()
@@ -369,7 +384,7 @@ class RacketOptionsFlow(_LookupMixin, OptionsFlow):
                     return await self.async_step_pick()
 
         schema = LOOKUP_SCHEMA.extend(RACKET_DETAILS_SCHEMA.schema)
-        if linked:
+        if looked_up:
             schema = schema.extend(
                 {vol.Optional(CONF_USE_DATASET, default=True): BooleanSelector()}
             )

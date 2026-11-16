@@ -27,14 +27,16 @@
               "string_type": "String type",
               "initial_tension_loss": "Initial tension loss",
               "first_hour_loss": "Loss in the first hour of play",
-              "relaxation_loss": "Loss per tenfold age"
+              "relaxation_loss": "Loss per tenfold age",
+              "twu_tension_loss": "String's tension loss in the TWU database"
             },
             "data_description": {
               "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket.",
-              "string_type": "Sets the default rates. Polyester if empty. For a hybrid, pick the mains.",
+              "string_type": "Sets the default rates. If empty: the main string's material when the built-in string list knows it, else polyester. For a hybrid, pick the mains.",
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 4%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1%.",
-              "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 → 10 → 100 days). Default: polyester 4%, nylon 2%, gut 1.5%."
+              "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 \u2192 10 \u2192 100 days). Default: polyester 4%, nylon 2%, gut 1.5%.",
+              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates by how it compares with the median (polyester 41%, nylon 21%, gut 15%)."
             }
           },
           "due": {
@@ -65,7 +67,8 @@
             "data_description": {
               "main_tension": "In this racket's tension unit.",
               "cross_string": "Hybrids only. Defaults to the main string.",
-              "cross_tension": "Defaults to the main tension."
+              "cross_tension": "Defaults to the main tension.",
+              "main_string": "Pick from the list or type any string."
             }
           },
           "specs": {
@@ -85,7 +88,7 @@
               "strung_weight": "Grams, with strings, grip and dampener as you play it.",
               "unstrung_weight": "Grams, frame only.",
               "balance": "Millimetres from the butt cap (e.g. 320 mm).",
-              "swingweight": "In kg·cm², e.g. 320.",
+              "swingweight": "In kg\u00b7cm\u00b2, e.g. 320.",
               "stiffness": "RA, e.g. 66.",
               "length": "Inches, e.g. 27.",
               "tension_min": "In this racket's tension unit.",
@@ -149,14 +152,16 @@
               "string_type": "String type",
               "initial_tension_loss": "Initial tension loss",
               "first_hour_loss": "Loss in the first hour of play",
-              "relaxation_loss": "Loss per tenfold age"
+              "relaxation_loss": "Loss per tenfold age",
+              "twu_tension_loss": "String's tension loss in the TWU database"
             },
             "data_description": {
               "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket.",
-              "string_type": "Sets the default rates. Polyester if empty. For a hybrid, pick the mains.",
+              "string_type": "Sets the default rates. If empty: the main string's material when the built-in string list knows it, else polyester. For a hybrid, pick the mains.",
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 4%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1%.",
-              "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 → 10 → 100 days). Default: polyester 4%, nylon 2%, gut 1.5%."
+              "relaxation_loss": "Lost, played or not, each time the strings' age multiplies by 10 (1 \u2192 10 \u2192 100 days). Default: polyester 4%, nylon 2%, gut 1.5%.",
+              "twu_tension_loss": "Optional. The \"Tension Loss (%)\" of your usual main string in Tennis Warehouse University's String Performance Database. Scales the string type's default rates by how it compares with the median (polyester 41%, nylon 21%, gut 15%)."
             }
           },
           "due": {
@@ -187,7 +192,8 @@
             "data_description": {
               "main_tension": "In this racket's tension unit.",
               "cross_string": "Hybrids only. Defaults to the main string.",
-              "cross_tension": "Defaults to the main tension."
+              "cross_tension": "Defaults to the main tension.",
+              "main_string": "Pick from the list or type any string."
             }
           },
           "specs": {
@@ -207,7 +213,7 @@
               "strung_weight": "Grams, with strings, grip and dampener as you play it.",
               "unstrung_weight": "Grams, frame only.",
               "balance": "Millimetres from the butt cap (e.g. 320 mm).",
-              "swingweight": "In kg·cm², e.g. 320.",
+              "swingweight": "In kg\u00b7cm\u00b2, e.g. 320.",
               "stiffness": "RA, e.g. 66.",
               "length": "Inches, e.g. 27.",
               "tension_min": "In this racket's tension unit.",
@@ -276,6 +282,9 @@
     "button": {
       "repeat_restring": {
         "name": "Restring with usual setup"
+      },
+      "strings_broke": {
+        "name": "Strings broke"
       }
     },
     "calendar": {
@@ -342,6 +351,58 @@
       },
       "tension_max": {
         "name": "Recommended tension (max)"
+      },
+      "string_life": {
+        "name": "Average string life",
+        "state_attributes": {
+          "average_hours_played": {
+            "name": "Average hours played"
+          },
+          "average_days_to_break": {
+            "name": "Average days to break"
+          }
+        }
+      },
+      "breakages": {
+        "name": "String breakages",
+        "state_attributes": {
+          "breakage_rate": {
+            "name": "Breakage rate"
+          },
+          "last_broken": {
+            "name": "Last broken"
+          }
+        }
+      },
+      "cost_this_year": {
+        "name": "String cost this year",
+        "state_attributes": {
+          "restrings_this_year": {
+            "name": "Restrings this year"
+          }
+        }
+      },
+      "cost_per_hour": {
+        "name": "String cost per hour"
+      },
+      "most_used_string": {
+        "name": "Most used setup",
+        "state_attributes": {
+          "string_counts": {
+            "name": "Times used"
+          }
+        }
+      },
+      "best_rated_string": {
+        "name": "Best rated setup",
+        "state_attributes": {
+          "average_rating": {
+            "name": "Average rating"
+          },
+          "ratings": {
+            "name": "Ratings"
+          }
+        }
       }
     }
   },
@@ -365,10 +426,25 @@
       "message": "Racket {racket} has no usual setup and no restrings to repeat."
     },
     "no_play_settings": {
-      "message": "Set hours of play per week for {racket} first (Configure → Play and tension loss)."
+      "message": "Set hours of play per week for {racket} first (Configure \u2192 Play and tension loss)."
     },
     "cannot_calibrate": {
       "message": "Can't calibrate to {tension}: it must be below the strung tension ({strung}) and lose less than 50%."
+    },
+    "broken_before_restring": {
+      "message": "The strings can't break ({broken}) before they were strung ({date})."
+    },
+    "import_file": {
+      "message": "Couldn't read {file}: {reason}."
+    },
+    "import_empty": {
+      "message": "The CSV is empty."
+    },
+    "import_columns": {
+      "message": "The CSV needs a heading row with these columns: {columns}."
+    },
+    "import_row": {
+      "message": "Row {row} of the CSV: {reason}. Nothing was imported."
     }
   },
   "services": {
@@ -386,7 +462,7 @@
         },
         "main_string": {
           "name": "Main string",
-          "description": "String used for the mains (or full bed)."
+          "description": "String used for the mains (or full bed). Pick from the list or type any string."
         },
         "main_tension": {
           "name": "Main tension",
@@ -410,7 +486,7 @@
         },
         "rating": {
           "name": "Rating",
-          "description": "How much you liked this setup, 1–5."
+          "description": "How much you liked this setup, 1\u20135."
         },
         "notes": {
           "name": "Notes",
@@ -419,6 +495,10 @@
         "image": {
           "name": "Photo",
           "description": "A photo of the racket with this string job. Pick or upload one in My media."
+        },
+        "broken_date": {
+          "name": "Broke on",
+          "description": "When these strings broke, if they did (for logging old restrings)."
         }
       }
     },
@@ -476,7 +556,7 @@
     },
     "update_restring": {
       "name": "Update restring",
-      "description": "Change a logged restring, e.g. add notes or a rating after playing. Updates the latest restring if no ID is given.",
+      "description": "Change a logged restring, e.g. add notes or a rating after playing, or mark the strings broken. Updates the latest restring if no ID is given.",
       "fields": {
         "config_entry_id": {
           "name": "Racket",
@@ -516,7 +596,7 @@
         },
         "rating": {
           "name": "Rating",
-          "description": "How much you liked this setup, 1–5."
+          "description": "How much you liked this setup, 1\u20135."
         },
         "notes": {
           "name": "Notes",
@@ -529,6 +609,14 @@
         "remove_image": {
           "name": "Remove photo",
           "description": "Delete the photo for this restring."
+        },
+        "broken": {
+          "name": "Broken",
+          "description": "On: these strings broke (today unless Broke on is set). Off: they didn't."
+        },
+        "broken_date": {
+          "name": "Broke on",
+          "description": "When these strings broke."
         }
       }
     },
@@ -553,6 +641,68 @@
         "config_entry_id": {
           "name": "Racket",
           "description": "The racket."
+        }
+      }
+    },
+    "export_history": {
+      "name": "Export history",
+      "description": "Save restring history as a CSV file in /config/racket_tracker/exports (photos aren't included). The file path and the CSV text are in the response.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket to export. Leave empty for all rackets."
+        }
+      }
+    },
+    "import_history": {
+      "name": "Import history",
+      "description": "Add restrings from CSV: an export, or a spreadsheet with date, main_string and main_tension columns (optional: cross_string, cross_tension, tension_unit, cost, stringer, rating, broken_date, notes). Restrings already logged are skipped. No restrung events are fired.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket to add the restrings to."
+        },
+        "file": {
+          "name": "File",
+          "description": "Path to a CSV file in /config/racket_tracker/exports or another allowed folder (allowlist_external_dirs)."
+        },
+        "csv": {
+          "name": "CSV text",
+          "description": "Or paste the CSV here."
+        }
+      }
+    }
+  },
+  "issues": {
+    "dataset_unreachable": {
+      "title": "Couldn't check the racket dataset",
+      "description": "Strung couldn't reach the Racqix racket dataset to check your looked-up rackets. Their specs are saved, so nothing stops working. This goes away once the dataset can be reached again."
+    },
+    "dataset_racket_missing": {
+      "title": "{racket} is no longer in the racket dataset",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{racket} is no longer in the racket dataset",
+            "description": "{dataset_racket} was removed from the Racqix racket dataset. Submit to unlink {racket} from it. Its looked-up specs are kept; turn off **Use looked-up specs** under Configure to remove them."
+          }
+        },
+        "abort": {
+          "racket_removed": "The racket was removed."
+        }
+      }
+    },
+    "dataset_specs_changed": {
+      "title": "New specs for {racket} in the racket dataset",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "New specs for {racket}",
+            "description": "The Racqix racket dataset changed the specs of {dataset_racket}:\n\n{changes}\n\nSubmit to use the new values. Specs you measured yourself still win."
+          }
+        },
+        "abort": {
+          "racket_removed": "The racket was removed."
         }
       }
     }

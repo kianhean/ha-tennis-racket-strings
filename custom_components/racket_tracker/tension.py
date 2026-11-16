@@ -26,6 +26,8 @@ Where the shape and the numbers come from:
   ~3.5-7 % of the strung tension. A logarithm of hours gives that shape; the
   polyester default costs 3 % in the first hour and 3 % more for each doubling
   of (1 + hours), so ~9.5 % after 8 hours.
+- Without a string type set for the racket, the main string's material comes
+  from the bundled string catalog (string_catalog.py), else polyester.
 - Materials: "Natural gut has one of the lowest rates of tension loss ...
   while all polyester strings lose tension rapidly" (Cross et al. 2000);
   "Polyester loses more than nylon which loses more than gut" (Lindsey, "How
@@ -33,6 +35,12 @@ Where the shape and the numbers come from:
   nylon and gut presets scale the polyester one by roughly the ratio of the
   median losses in TWU's string database (polyester 41 %, nylon 21 %,
   gut 15 %).
+- A string's own measured tension loss can replace the median: TWU's String
+  Performance Database (twu.tennis-warehouse.com/learning_center/reporter2.php)
+  lists a "Tension Loss (%)" per string from the same impact test. When it is
+  set (twu_tension_loss), the string type's rates are scaled by that value over
+  the type's median, e.g. a polyester measured at 30 % loses 30/41 of the
+  polyester defaults. Rates entered by hand, or set by calibrate_tension, win.
 - The initial 10 % is relative to the tension right after stringing, as a
   stringbed tension meter shows it; measured against the machine's pull
   tension the first-day loss is larger (28 kg -> ~20 kg in a day, Cross
@@ -51,7 +59,8 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
-from .const import ATTR_CROSS_TENSION, ATTR_DATE, ATTR_MAIN_TENSION
+from .const import ATTR_CROSS_TENSION, ATTR_DATE, ATTR_MAIN_STRING, ATTR_MAIN_TENSION
+from .string_catalog import material
 
 CONF_PLAY = "play"
 CONF_HOURS_PER_WEEK = "hours_per_week"
@@ -59,6 +68,7 @@ CONF_STRING_TYPE = "string_type"
 CONF_INITIAL_LOSS = "initial_tension_loss"
 CONF_FIRST_HOUR_LOSS = "first_hour_loss"
 CONF_RELAXATION_LOSS = "relaxation_loss"
+CONF_TWU_LOSS = "twu_tension_loss"
 # Removed in 0.4.0 (linear model); migrated to first_hour_loss
 CONF_LOSS_PER_HOUR = "tension_loss_per_hour"
 
@@ -82,7 +92,18 @@ STRING_TYPES: dict[str, LossRates] = {
     STRING_NYLON: LossRates(initial=6, first_hour=1.5, relaxation=2),
     STRING_GUT: LossRates(initial=4, first_hour=1, relaxation=1.5),
 }
+# Median "Tension Loss (%)" per material in TWU's string database; see above.
+TWU_MEDIAN_LOSS: dict[str, float] = {
+    STRING_POLYESTER: 41,
+    STRING_NYLON: 21,
+    STRING_GUT: 15,
+}
 DEFAULT_STRING_TYPE = STRING_POLYESTER
+
+# Where the string type came from
+SOURCE_RACKET = "racket"  # set in the racket's play options
+SOURCE_STRING = "string"  # the current main string's material (string catalog)
+SOURCE_DEFAULT = "default"
 MAX_LOSS = 50.0
 
 
@@ -93,6 +114,8 @@ class PlaySettings:
     hours_per_week: float
     string_type: str
     rates: LossRates
+    string_type_source: str = SOURCE_DEFAULT
+    twu_tension_loss: float | None = None
 
 
 @dataclass(frozen=True)
@@ -105,14 +128,36 @@ class Estimate:
     cross_tension: float | None
 
 
-def play_settings(options: Mapping[str, Any]) -> PlaySettings | None:
-    """The racket's play settings, or None if hours per week isn't set."""
+def play_settings(
+    options: Mapping[str, Any], record: Mapping[str, Any] | None = None
+) -> PlaySettings | None:
+    """The racket's play settings, or None if hours per week isn't set.
+
+    Without a string type in the options, the material of the given restring's
+    main string is used if the string catalog knows it, else polyester.
+    """
     play = options.get(CONF_PLAY) or {}
     hours = play.get(CONF_HOURS_PER_WEEK)
     if hours is None:
         return None
-    string_type = play.get(CONF_STRING_TYPE) or DEFAULT_STRING_TYPE
-    preset = STRING_TYPES.get(string_type, STRING_TYPES[DEFAULT_STRING_TYPE])
+    if (string_type := play.get(CONF_STRING_TYPE)) in STRING_TYPES:
+        source = SOURCE_RACKET
+    elif (
+        record
+        and (string_type := material(record.get(ATTR_MAIN_STRING))) in STRING_TYPES
+    ):
+        source = SOURCE_STRING
+    else:
+        string_type, source = DEFAULT_STRING_TYPE, SOURCE_DEFAULT
+    preset = STRING_TYPES[string_type]
+    twu = play.get(CONF_TWU_LOSS)
+    if twu:
+        scale = float(twu) / TWU_MEDIAN_LOSS[string_type]
+        preset = LossRates(
+            initial=round(preset.initial * scale, 2),
+            first_hour=round(preset.first_hour * scale, 2),
+            relaxation=round(preset.relaxation * scale, 2),
+        )
     rates = LossRates(
         *(
             preset_value if (value := play.get(key)) is None else float(value)
@@ -123,7 +168,13 @@ def play_settings(options: Mapping[str, Any]) -> PlaySettings | None:
             )
         )
     )
-    return PlaySettings(float(hours), string_type, rates)
+    return PlaySettings(
+        float(hours),
+        string_type,
+        rates,
+        string_type_source=source,
+        twu_tension_loss=float(twu) if twu else None,
+    )
 
 
 def loss_percent(rates: LossRates, days: float, hours: float) -> float:

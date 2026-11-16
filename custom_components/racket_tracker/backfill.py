@@ -16,6 +16,7 @@ hours after that from the sensors' own states, which give the same values.
 from __future__ import annotations
 
 import bisect
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -31,7 +32,7 @@ from .const import (
     DOMAIN,
     TENSION_UNIT_LBS,
 )
-from .tension import PlaySettings, estimate, play_settings
+from .tension import estimate, play_settings
 
 if TYPE_CHECKING:
     from . import RacketConfigEntry
@@ -41,7 +42,7 @@ MAX_DAYS = 3 * 365
 
 def _hourly(
     records: list[dict[str, Any]],
-    settings: PlaySettings | None,
+    options: Mapping[str, Any],
     start: datetime,
     end: datetime,
 ) -> tuple[list[tuple[datetime, float]], list[tuple[datetime, float]]]:
@@ -58,6 +59,8 @@ def _hourly(
             index = bisect.bisect_right(dates, day.isoformat()) - 1
             record = records[index] if index >= 0 else None
             value = record.get(ATTR_MAIN_TENSION) if record else None
+            # Each restring with its own string's material
+            settings = play_settings(options, record) if record else None
             est = estimate(record, settings, day) if record and settings else None
             per_day[day] = (
                 value if isinstance(value, (int, float)) else None,
@@ -90,9 +93,8 @@ async def async_backfill(hass: HomeAssistant, entry: RacketConfigEntry) -> None:
     end = dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
     first = dt_util.start_of_local_day(date.fromisoformat(records[0][ATTR_DATE]))
     start = max(dt_util.as_utc(first), end - timedelta(days=MAX_DAYS))
-    settings = play_settings(entry.options)
     strung, estimated = await hass.async_add_executor_job(
-        _hourly, records, settings, start, end
+        _hourly, records, dict(entry.options), start, end
     )
 
     registry = er.async_get(hass)

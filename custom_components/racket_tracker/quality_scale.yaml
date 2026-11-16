@@ -84,8 +84,8 @@ rules:
     status: done
     comment: Reconfigure renames the racket; its details are edited in the options flow.
   repair-issues:
-    status: exempt
-    comment: Nothing for the user to repair.
+    status: done
+    comment: A racket linked to the Racqix dataset gets a fixable issue when the dataset changes its specs or drops it, and a warning while the dataset can't be reached (repairs.py).
   stale-devices:
     status: exempt
     comment: Removing the entry removes its device.

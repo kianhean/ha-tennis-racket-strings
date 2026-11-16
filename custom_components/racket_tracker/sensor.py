@@ -414,7 +414,11 @@ class RacketSpecSensor(SensorEntity):
             self._attr_suggested_unit_of_measurement = (
                 self._attr_native_unit_of_measurement
             )
-        self._attr_native_value = value["value"]
+        native = value["value"]
+        # The form stores 320 as 320.0; show it as 320, like looked-up values
+        if isinstance(native, float) and native.is_integer():
+            native = int(native)
+        self._attr_native_value = native
         self._attr_extra_state_attributes = {"source": value["source"]}
         if value["source"] == SOURCE_DATASET:
             self._attr_attribution = ATTRIBUTION

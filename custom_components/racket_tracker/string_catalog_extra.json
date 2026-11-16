@@ -1,10 +1,4 @@
 {
-  "comment": "Strings missing from the bundled CC0 list (string_catalog.json). Same format: [brand, model, string type]. Add newer strings here.",
-  "strings": [
-    ["Solinco", "Mach-10 16L (1.25)", "polyester"],
-    ["Toroline", "Absolute 1.25", "polyester"],
-    ["Toroline", "Caviar 1.25", "polyester"],
-    ["Toroline", "O-Toro 1.25", "polyester"],
-    ["Toroline", "Wasabi 1.25", "polyester"]
-  ]
+  "comment": "Strings missing from the bundled CC0 list (string_catalog.json). Same format: [brand, model, string type]. Add newer strings here once their material is confirmed.",
+  "strings": []
 }

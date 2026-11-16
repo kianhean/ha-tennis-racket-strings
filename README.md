@@ -140,9 +140,9 @@ strings as you type: first the ones you've already logged, then a built-in list 
 strings with their material. Pick one or type anything; a string that isn't on the list is fine.
 
 The list is the [Tennis Racquets and Strings Dataset](https://github.com/LukeBatten17/tennis-racquets-and-strings-dataset)
-(CC0, July 2024), plus newer strings in
-[`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json); PRs that
-add strings there are welcome. It ships with the integration, so nothing is downloaded. When the
+(CC0, July 2024), so newer strings may be missing. PRs that add them to
+[`string_catalog_extra.json`](custom_components/racket_tracker/string_catalog_extra.json), with
+their material, are welcome. It ships with the integration, so nothing is downloaded. When the
 racket has no string type set, the [tension estimate](#estimated-tension) uses the material of the
 current main string from this list (gauge and brand don't need to match: "Hyper-G 1.25" finds
 Solinco Hyper-G).

@@ -176,10 +176,13 @@ Each restring can have **one photo**.
 - Deleting a restring or a racket deletes its photos.
 
 `image.<racket>_photo` shows the latest restring photo. Every history entry also has an
-`image_url` (`/racket_tracker/images/<id>.jpg`) for dashboards.
+`image_url` (`/api/racket_tracker/images/<id>.jpg?authSig=...`) for dashboards and notifications.
 
-> **Privacy:** `image_url` links work without logging in, behind a random ID that can't be guessed
-> (like files in `/local/`). The `image.*` entity always needs a login.
+> **Privacy:** photos need a login. An `image_url` is a signed link that also works in an `<img>`
+> tag or a notification, but only for **two days** and only until Home Assistant restarts. The
+> sensors sign their links again every midnight and on every restart, so dashboards always show
+> the photo; don't save an `image_url` for later. Signed links are left out of the recorder
+> database and diagnostics.
 
 ## Racket specs
 

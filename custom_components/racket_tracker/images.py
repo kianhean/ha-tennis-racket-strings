@@ -3,19 +3,30 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 import shutil
+from datetime import timedelta
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+from aiohttp import web
 from homeassistant.components import media_source
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers.http import HomeAssistantView
 
 from .const import DOMAIN
 
-IMAGE_URL_PREFIX = f"/{DOMAIN}/images"
+IMAGE_URL_PREFIX = f"/api/{DOMAIN}/images"
+# Signed photo URLs work without an Authorization header (for <img> tags) for this
+# long, or until HA restarts. The sensors sign theirs again every midnight.
+IMAGE_URL_LIFETIME = timedelta(days=2)
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+# Stored names are <restring_id><ext>; anything else is never served
+_IMAGE_NAME = re.compile(r"^[0-9a-f]{12}\.[a-z0-9]{2,5}$")
 
 
 def image_dir(hass: HomeAssistant) -> Path:
@@ -23,9 +34,48 @@ def image_dir(hass: HomeAssistant) -> Path:
     return Path(hass.config.path(DOMAIN, "images"))
 
 
-def image_url(filename: str | None) -> str | None:
-    """Public URL of a stored photo."""
-    return f"{IMAGE_URL_PREFIX}/{filename}" if filename else None
+def image_url(hass: HomeAssistant, filename: str | None) -> str | None:
+    """Signed URL of a stored photo, valid for IMAGE_URL_LIFETIME.
+
+    Signed for HA's content user rather than whoever happens to be calling, so a
+    URL in a state attribute doesn't depend on (or reveal) one user's login.
+    """
+    if not filename:
+        return None
+    return async_sign_path(
+        hass,
+        f"{IMAGE_URL_PREFIX}/{filename}",
+        IMAGE_URL_LIFETIME,
+        use_content_user=True,
+    )
+
+
+class RacketImageView(HomeAssistantView):
+    """Serve restring photos to logged-in users (or with a signed URL)."""
+
+    url = IMAGE_URL_PREFIX + "/{filename}"
+    name = f"api:{DOMAIN}:images"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Serve photos from the integration's image folder."""
+        self._hass = hass
+        self._folder = image_dir(hass)
+
+    async def get(self, request: web.Request, filename: str) -> web.StreamResponse:
+        """Return one photo."""
+        if not _IMAGE_NAME.fullmatch(filename):
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        path = self._folder / filename
+        if not await self._hass.async_add_executor_job(path.is_file):
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+        return web.FileResponse(
+            path,
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Content-Type": image_content_type(filename),
+            },
+        )
 
 
 def image_content_type(filename: str) -> str:

@@ -21,15 +21,13 @@ from .const import (
 from .images import image_url
 
 
-def with_image_url(record: dict[str, Any]) -> dict[str, Any]:
-    """Copy of a record with a browser-usable image URL added."""
+def with_image_url(hass: HomeAssistant, record: dict[str, Any]) -> dict[str, Any]:
+    """Copy of a record with a signed, short-lived photo URL added.
+
+    Each signing gives a new URL, so a replaced photo never comes from the cache.
+    """
     out = dict(record)
-    out[ATTR_IMAGE_URL] = image_url(record.get(ATTR_IMAGE))
-    if out[ATTR_IMAGE_URL] and (
-        stamp := record.get("updated") or record.get("created")
-    ):
-        # Cache-buster so a replaced photo shows up immediately
-        out[ATTR_IMAGE_URL] += f"?v={stamp[:19].replace(':', '')}"
+    out[ATTR_IMAGE_URL] = image_url(hass, record.get(ATTR_IMAGE))
     return out
 
 
@@ -43,6 +41,7 @@ class RacketHistory:
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         """Initialize the history store."""
+        self.hass = hass
         self._store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}"
         )
@@ -88,7 +87,7 @@ class RacketHistory:
 
     def newest_first(self) -> list[dict[str, Any]]:
         """Return a copy of the history, most recent first (with photo URLs)."""
-        return [with_image_url(r) for r in reversed(self.restrings)]
+        return [with_image_url(self.hass, r) for r in reversed(self.restrings)]
 
     # ---------------------------------------------------------------- mutations
 

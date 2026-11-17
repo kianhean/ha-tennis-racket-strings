@@ -8,7 +8,6 @@ from datetime import date
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components.http import StaticPathConfig  # type: ignore[attr-defined]
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -69,7 +68,7 @@ from .history_io import (
     to_csv,
 )
 from .images import (
-    IMAGE_URL_PREFIX,
+    RacketImageView,
     async_delete_image,
     async_import_image,
     image_dir,
@@ -286,7 +285,7 @@ async def async_log_restring(
     _check_broken_date(data)
 
     record = await entry.runtime_data.async_add(data)
-    record = with_image_url(record)
+    record = with_image_url(hass, record)
     hass.bus.async_fire(
         EVENT_RESTRUNG,
         {"config_entry_id": entry.entry_id, "racket": entry.title, **record},
@@ -356,7 +355,7 @@ async def async_mark_broken(
     broken = (on or dt_util.now().date()).isoformat()
     _check_broken_date({**latest, ATTR_BROKEN_DATE: broken})
     record = await history.async_update(latest["id"], {ATTR_BROKEN_DATE: broken})
-    return with_image_url(record or {})
+    return with_image_url(hass, record or {})
 
 
 def usual_setup(
@@ -392,13 +391,11 @@ def usual_setup(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the integration's actions and the photo URL path."""
+    """Register the integration's actions and the (login-only) photo view."""
     async_schedule_refresh(hass)
     folder = image_dir(hass)
     await hass.async_add_executor_job(lambda: folder.mkdir(parents=True, exist_ok=True))
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(IMAGE_URL_PREFIX, str(folder), False)]
-    )
+    hass.http.register_view(RacketImageView(hass))
 
     async def add_restring(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
@@ -495,7 +492,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             await async_delete_image(hass, existing[ATTR_IMAGE])
             changes[ATTR_IMAGE] = None
         record = await history.async_update(restring_id, changes)
-        return {"racket": entry.title, "restring": with_image_url(record or {})}
+        return {"racket": entry.title, "restring": with_image_url(hass, record or {})}
 
     async def delete_restring(call: ServiceCall) -> None:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])

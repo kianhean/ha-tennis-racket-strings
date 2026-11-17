@@ -7,7 +7,7 @@ One config entry = one racket = one device.
 
 ```
 custom_components/racket_tracker/
-├── __init__.py        # Setup/unload, action registration (in async_setup), photo static path
+├── __init__.py        # Setup/unload, action registration (in async_setup), login-only photo view
 ├── const.py           # DOMAIN, option keys, restring field names, action/event names
 ├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
@@ -118,8 +118,12 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
 
 ## Photos
 
-Photos are copied into `<config>/racket_tracker/images/<restring_id>.<ext>` and served unauthenticated at
-`/racket_tracker/images/` (random IDs, like `/local/`); the image entity uses HA's token auth.
+Photos are copied into `<config>/racket_tracker/images/<restring_id>.<ext>` and served only to
+logged-in users by `RacketImageView` (`/api/racket_tracker/images/<file>`, `requires_auth`; never a
+static path). `image_url` is `async_sign_path(..., use_content_user=True)`, valid for
+`IMAGE_URL_LIFETIME` (2 days) or until HA restarts, so `<img>` tags and notifications work; the
+strings/restrings sensors re-sign at midnight, keep `image_url` out of the recorder, and
+diagnostics show stored records without URLs. The image entity uses HA's token auth.
 Media-source IDs resolve via `PlayMedia.path` (HA 2025.6+) with a `/media/<dir>/<file>`
 fallback for older versions. Deleting a restring/racket deletes its photos.
 

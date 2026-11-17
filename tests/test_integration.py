@@ -1,11 +1,16 @@
 """End-to-end tests: add a racket, log restrings with photos, edit, delete."""
 
+from datetime import timedelta
 from pathlib import Path
 
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import async_capture_events
+from pytest_homeassistant_custom_component.common import (
+    async_capture_events,
+    async_fire_time_changed,
+)
 
 from custom_components.racket_tracker.const import DOMAIN, EVENT_RESTRUNG
 
@@ -68,7 +73,8 @@ async def test_full_flow(hass: HomeAssistant, tmp_path: Path, hass_client) -> No
         return_response=True,
     )
     first_id = resp["restring"]["id"]
-    assert resp["restring"]["image_url"].startswith("/racket_tracker/images/")
+    assert resp["restring"]["image_url"].startswith("/api/racket_tracker/images/")
+    assert "authSig=" in resp["restring"]["image_url"]
 
     # Second restring: hybrid, photo via media selector style dict is tested below
     await hass.services.async_call(
@@ -114,9 +120,9 @@ async def test_full_flow(hass: HomeAssistant, tmp_path: Path, hass_client) -> No
     client = await hass_client()
     r = await client.get(photo_state.attributes["entity_picture"])
     assert r.status == 200 and await r.read() == PNG
-    # Static URL used by dashboards
+    # Signed URL used by dashboards
     r = await client.get(hist.attributes["history"][1]["image_url"])
-    assert r.status == 200
+    assert r.status == 200 and await r.read() == PNG
 
     # Update latest (no id): add notes, rating and a photo
     await hass.services.async_call(
@@ -262,6 +268,69 @@ async def test_diagnostics(hass: HomeAssistant) -> None:
     assert diag["title"] == "Pure Aero"
     assert diag["options"]["brand"] == "Babolat"
     assert diag["restring_count"] == 1 and diag["restrings"][0]["main_string"] == "X"
+    # No signed photo URLs in a file users share
+    assert "image_url" not in diag["restrings"][0]
+
+
+async def test_photos_need_login(
+    hass: HomeAssistant,
+    tmp_path: Path,
+    hass_client,
+    hass_client_no_auth,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Photos are served only to logged-in users or through short-lived signed URLs."""
+    hass.config.allowlist_external_dirs = {str(tmp_path)}
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    photo = tmp_path / "racket.png"
+    photo.write_bytes(PNG)
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {
+            "config_entry_id": entry_id,
+            "main_string": "X",
+            "main_tension": 50,
+            "image": str(photo),
+        },
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+    filename = resp["restring"]["image"]
+    signed = hass.states.get("sensor.pure_aero_strings").attributes["image_url"]
+    path = signed.split("?")[0]
+    assert path == f"/api/racket_tracker/images/{filename}"
+    anonymous = await hass_client_no_auth()
+    client = await hass_client()
+
+    # The signed URL works without a login; the bare path, a tampered signature or
+    # the old static path don't
+    r = await anonymous.get(signed)
+    assert r.status == 200 and await r.read() == PNG
+    assert r.headers["Cache-Control"].startswith("private")
+    assert (await anonymous.get(path)).status == 401
+    assert (await anonymous.get(signed[:-3] + "abc")).status == 401
+    assert (await anonymous.get(f"/racket_tracker/images/{filename}")).status == 404
+    # A login is enough, but only for stored photo names
+    assert (await client.get(path)).status == 200
+    for name in ("racket_tracker.json", "0123456789ab.png"):
+        assert (await client.get(f"/api/racket_tracker/images/{name}")).status == 404
+    traversal = await client.get("/api/racket_tracker/images/%2e%2e%2fsecrets.yaml")
+    assert traversal.status in (400, 404)
+
+    # Every midnight the sensors sign the URLs again, before the old ones expire
+    for _ in range(3):
+        freezer.tick(timedelta(days=1))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+    assert (await anonymous.get(signed)).status == 401
+    fresh = hass.states.get("sensor.pure_aero_strings").attributes["image_url"]
+    history = hass.states.get("sensor.pure_aero_restrings").attributes["history"]
+    for url in (fresh, history[0]["image_url"]):
+        assert url != signed
+        assert (await anonymous.get(url)).status == 200
 
 
 async def test_no_recorder(hass: HomeAssistant) -> None:

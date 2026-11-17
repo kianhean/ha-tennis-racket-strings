@@ -29,5 +29,6 @@ async def async_get_config_entry_diagnostics(
             play_settings(entry.options, history.latest),
             dt_util.now().date(),
         ),
-        "restrings": history.newest_first(),
+        # Stored records: no signed photo URLs in a file users share
+        "restrings": list(reversed(history.restrings)),
     }

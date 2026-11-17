@@ -79,7 +79,7 @@ def _days_since(history: RacketHistory) -> int | None:
 def _latest_attrs(history: RacketHistory) -> dict[str, Any]:
     if not (latest := history.latest):
         return {}
-    r = with_image_url(latest)
+    r = with_image_url(history.hass, latest)
     return {
         "restring_id": r["id"],
         ATTR_DATE: r.get(ATTR_DATE),
@@ -112,6 +112,7 @@ SENSORS: tuple[RacketSensorDescription, ...] = (
         translation_key="strings",
         value_fn=_strings_label,
         attrs_fn=_latest_attrs,
+        daily_refresh=True,  # signs image_url again before it expires
     ),
     RacketSensorDescription(
         key="tension",
@@ -144,6 +145,7 @@ SENSORS: tuple[RacketSensorDescription, ...] = (
         translation_key="restrings",
         value_fn=lambda h: h.count,
         attrs_fn=lambda h: {"history": h.newest_first()},
+        daily_refresh=True,  # signs each image_url again before it expires
     ),
     RacketSensorDescription(
         key="total_cost",
@@ -346,8 +348,9 @@ class RacketSensor(SensorEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    # Keep the (potentially long) history list out of the recorder database
-    _unrecorded_attributes = frozenset({"history"})
+    # Keep the (potentially long) history list and the short-lived signed photo
+    # URL out of the recorder database
+    _unrecorded_attributes = frozenset({"history", "image_url"})
     entity_description: RacketSensorDescription
 
     def __init__(

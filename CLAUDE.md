@@ -15,7 +15,7 @@ custom_components/racket_tracker/
 ├── repairs.py         # On entry setup: linked racket looked up in the list (async_get_dataset; not in it = removed) → issues (specs changed / missing: fix flows; unreachable = no copy as new as the link's version: warning)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
 ├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
-├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served) and import (parse_csv: validate all rows, skip duplicates)
+├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served; play sessions in a second *-play.csv) and import (parse_csv / parse_play_csv by columns: validate all rows, skip duplicates)
 ├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
 ├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
@@ -35,8 +35,8 @@ custom_components/racket_tracker/
 ├── quality_scale.yaml # Self-assessment; keep it honest
 └── brand/             # icon/logo PNGs loaded by HA 2026.3+ and checked by hacs/action. Do not delete.
 
-blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings, racket_picker
-examples/              # scripts.yaml (form UI), dashboard.yaml (one racket), dashboard_multi.yaml (dropdown: input_select.racket + racket_picker blueprint; cards find the racket by sensor.<racket>_strings). Built-in cards only
+blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings, racket_picker, play_prompt (notification buttons → log_play), play_from_calendar (calendar event end → log_play)
+examples/              # scripts.yaml (form UI, incl. log_play), dashboard.yaml (one racket), dashboard_play.yaml (Play section, logged sessions), dashboard_multi.yaml (dropdown: input_select.racket + racket_picker blueprint; cards find the racket by sensor.<racket>_strings). Built-in cards only
 images/brand/          # strung-logo.jpg (the logo) → make_brand.py → brand/*.png (no tagline; light logo recolours white to navy)
 images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml and dashboard_multi.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
@@ -122,6 +122,7 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
   descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
   main/cross string: used strings first, then the catalog. Runs on setup and history changes.
   Stats sensor names must not end in "strings": dashboards find rackets by `sensor.*_strings`.
+- Blueprint tests: don't `async_block_till_done` while a run sits in `wait_for_trigger` (it never returns); calendar-trigger test events must not end on its 15-minute refresh times.
 - Import fires no `restrung` events. Duplicates: same `id`, or same date + main string + tension.
 
 ## Photos

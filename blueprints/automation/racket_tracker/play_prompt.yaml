@@ -1,0 +1,125 @@
+blueprint:
+  name: Racket – ask how long you played
+  description: >-
+    On the days and at the time you choose, send a phone notification asking
+    how long you played, with three buttons (1 h, 1.5 h, 2 h by default) and
+    "Didn't play". Tapping one logs a play session for today with the
+    **Log play** action of the Strung integration. The racket must count
+    **Logged sessions** (Configure → Play and tension loss). Needs the Home
+    Assistant Companion app for the notification buttons.
+  domain: automation
+  author: Strung
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/play_prompt.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    racket:
+      name: Racket
+      selector:
+        config_entry:
+          integration: racket_tracker
+    time:
+      name: Ask at
+      default: "20:00:00"
+      selector:
+        time: {}
+    weekdays:
+      name: On these days
+      default: [mon, tue, wed, thu, fri, sat, sun]
+      selector:
+        select:
+          multiple: true
+          options:
+            - { label: Monday, value: mon }
+            - { label: Tuesday, value: tue }
+            - { label: Wednesday, value: wed }
+            - { label: Thursday, value: thu }
+            - { label: Friday, value: fri }
+            - { label: Saturday, value: sat }
+            - { label: Sunday, value: sun }
+    short:
+      name: First button (hours)
+      default: 1
+      selector:
+        number: { min: 0.25, max: 12, step: 0.25, unit_of_measurement: h }
+    medium:
+      name: Second button (hours)
+      default: 1.5
+      selector:
+        number: { min: 0.25, max: 12, step: 0.25, unit_of_measurement: h }
+    long:
+      name: Third button (hours)
+      default: 2
+      selector:
+        number: { min: 0.25, max: 12, step: 0.25, unit_of_measurement: h }
+    notify_action:
+      name: Notify action
+      description: >-
+        The phone to ask, for example notify.mobile_app_your_phone.
+      selector:
+        text: {}
+    answer_within:
+      name: Wait for an answer
+      description: After this long, the buttons do nothing.
+      default: { hours: 12 }
+      selector:
+        duration: {}
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: time
+    at: !input time
+
+conditions:
+  - condition: time
+    weekday: !input weekdays
+
+variables:
+  racket: !input racket
+  short: !input short
+  medium: !input medium
+  long: !input long
+  name: "{{ config_entry_attr(racket, 'title') or 'your racket' }}"
+  # The day you were asked, even if you answer after midnight
+  asked_on: "{{ now().date() | string }}"
+  # Unique per run, so an old notification's buttons can't log today
+  prefix: "STRUNG_PLAY_{{ as_timestamp(now()) | int }}_{{ range(1000, 10000) | random }}"
+
+actions:
+  - action: !input notify_action
+    data:
+      title: "🎾 Did you play today?"
+      message: "How long did you play with {{ name }}?"
+      data:
+        tag: "strung_play_{{ racket }}"
+        actions:
+          - { action: "{{ prefix }}_SHORT", title: "{{ short }} h" }
+          - { action: "{{ prefix }}_MEDIUM", title: "{{ medium }} h" }
+          - { action: "{{ prefix }}_LONG", title: "{{ long }} h" }
+          - { action: "{{ prefix }}_NONE", title: "Didn't play" }
+  - wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: { action: "{{ prefix }}_SHORT" }
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: { action: "{{ prefix }}_MEDIUM" }
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: { action: "{{ prefix }}_LONG" }
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data: { action: "{{ prefix }}_NONE" }
+    timeout: !input answer_within
+    continue_on_timeout: false
+  - variables:
+      answer: "{{ wait.trigger.event.data.action | replace(prefix ~ '_', '') }}"
+  - condition: template
+    value_template: "{{ answer != 'NONE' }}"
+  - action: racket_tracker.log_play
+    data:
+      config_entry_id: "{{ racket }}"
+      hours: "{{ {'SHORT': short, 'MEDIUM': medium, 'LONG': long}[answer] }}"
+      date: "{{ asked_on }}"

@@ -7,11 +7,15 @@ checked on every HA version in the CI matrix.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from freezegun.api import FrozenDateTimeFactory
+from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.components.calendar.const import DATA_COMPONENT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
@@ -80,6 +84,8 @@ def test_every_blueprint_is_tested() -> None:
         "racket_picker.yaml",
         "restring_logged.yaml",
         "rate_strings.yaml",
+        "play_prompt.yaml",
+        "play_from_calendar.yaml",
     }
     assert {p.name for p in BLUEPRINTS.glob("*.yaml")} == tested
 
@@ -243,3 +249,137 @@ async def test_racket_picker(hass: HomeAssistant, notify_calls) -> None:
     await hass.config_entries.async_remove(blade)
     await hass.async_block_till_done()
     assert options() == ["Match racket"]
+
+
+async def _logged_racket(hass: HomeAssistant) -> str:
+    entry_id = await _add_racket(hass)
+    result = await hass.config_entries.options.async_init(entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {"tension_unit": "lbs", "play": {"tracking": "logged"}}
+    )
+    await hass.async_block_till_done()
+    return entry_id
+
+
+def _sessions(hass: HomeAssistant, entry_id: str) -> list[tuple[str, float, str]]:
+    entry = hass.config_entries.async_get_entry(entry_id)
+    return [
+        (s["date"], s["hours"], s.get("notes", "")) for s in entry.runtime_data.sessions
+    ]
+
+
+async def test_play_prompt(
+    hass: HomeAssistant, notify_calls, freezer: FrozenDateTimeFactory
+) -> None:
+    phone = async_mock_service(hass, "notify", "mobile_app_phone")
+    entry_id = await _logged_racket(hass)
+    now = dt_util.now().replace(hour=19, minute=59, second=0, microsecond=0)
+    freezer.move_to(now)
+    await _automation(
+        hass,
+        "play_prompt.yaml",
+        {
+            "racket": entry_id,
+            "time": "20:00:00",
+            "notify_action": "notify.mobile_app_phone",
+        },
+    )
+
+    async def _settle() -> None:
+        # Not async_block_till_done: it waits for the run, which waits for a tap
+        for _ in range(20):
+            await asyncio.sleep(0)
+
+    async def _ask() -> list[str]:
+        freezer.tick(timedelta(minutes=1))
+        async_fire_time_changed(hass)
+        await _settle()
+        return [a["action"] for a in phone[-1].data["data"]["actions"]]
+
+    actions = await _ask()
+    assert phone[-1].data["message"] == "How long did you play with Pure Aero?"
+    assert [a["title"] for a in phone[-1].data["data"]["actions"]] == [
+        "1 h",
+        "1.5 h",
+        "2 h",
+        "Didn't play",
+    ]
+    # Another notification's button does nothing
+    hass.bus.async_fire("mobile_app_notification_action", {"action": "OTHER"})
+    await _settle()
+    assert _sessions(hass, entry_id) == []
+
+    # Answered after midnight: logged for the day it asked
+    asked = now.date().isoformat()
+    freezer.tick(timedelta(hours=4, minutes=30))
+    hass.bus.async_fire("mobile_app_notification_action", {"action": actions[1]})
+    await hass.async_block_till_done()
+    assert _sessions(hass, entry_id) == [(asked, 1.5, "")]
+
+    # "Didn't play" logs nothing, the next day
+    freezer.move_to(now + timedelta(days=1))
+    actions = await _ask()
+    hass.bus.async_fire("mobile_app_notification_action", {"action": actions[3]})
+    await hass.async_block_till_done()
+    assert len(_sessions(hass, entry_id)) == 1
+
+
+class _Calendar(CalendarEntity):
+    """A calendar with fixed events, for the calendar trigger."""
+
+    _attr_name = "Club"
+
+    def __init__(self, events: list[CalendarEvent]) -> None:
+        self._events = events
+
+    @property
+    def event(self) -> CalendarEvent | None:
+        return None
+
+    async def async_get_events(self, hass, start_date, end_date):
+        return [
+            e
+            for e in self._events
+            if e.start_datetime_local < end_date and e.end_datetime_local > start_date
+        ]
+
+
+async def test_play_from_calendar(
+    hass: HomeAssistant, notify_calls, freezer: FrozenDateTimeFactory
+) -> None:
+    entry_id = await _logged_racket(hass)
+    start = dt_util.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    freezer.move_to(start)
+    today = start.date()
+
+    def timed(summary: str, hour: int, minutes: int) -> CalendarEvent:
+        # Off the trigger's 15-minute refresh times, as real events mostly are
+        begin = start.replace(hour=hour, minute=5)
+        return CalendarEvent(
+            start=begin, end=begin + timedelta(minutes=minutes), summary=summary
+        )
+
+    events = [
+        timed("Tennis with Sam", 9, 95),  # 1.5 h (to the nearest quarter)
+        timed("Dentist", 11, 60),
+        timed("League TENNIS match", 13, 360),  # Capped at 4 h
+        CalendarEvent(
+            start=today, end=today + timedelta(days=1), summary="Tennis camp"
+        ),
+    ]
+    assert await async_setup_component(hass, "calendar", {})
+    await hass.data[DATA_COMPONENT].async_add_entities([_Calendar(events)])
+    await hass.async_block_till_done()
+    await _automation(
+        hass,
+        "play_from_calendar.yaml",
+        {"calendar": "calendar.club", "racket": entry_id},
+    )
+    for _ in range(12 * 4):  # Through the day, 15 minutes at a time
+        freezer.tick(timedelta(minutes=15))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+    assert _sessions(hass, entry_id) == [
+        (today.isoformat(), 1.5, "Tennis with Sam"),
+        (today.isoformat(), 4, "League TENNIS match"),
+    ]

@@ -107,6 +107,42 @@ rate_current_strings:
         {% if image is defined and image %}{% set d = dict(d, image=image) %}{% endif %}
         {{ d }}
 
+# For rackets that count logged play sessions (Configure → Play and tension loss),
+# and examples/dashboard_play.yaml: log how long you played.
+log_play:
+  alias: Log play
+  description: Log a play session (racket set to count logged sessions).
+  icon: mdi:tennis-ball
+  mode: queued
+  fields:
+    racket:
+      name: Racket
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    hours:
+      name: Hours
+      required: true
+      default: 1.5
+      selector:
+        number: { min: 0.25, max: 8, step: 0.25, mode: slider, unit_of_measurement: h }
+    date:
+      name: Date (empty = today)
+      selector:
+        date:
+    notes:
+      name: Notes
+      selector:
+        text:
+  sequence:
+    - action: racket_tracker.log_play
+      data: >
+        {% set d = {'config_entry_id': racket, 'hours': hours} %}
+        {% if date is defined and date %}{% set d = dict(d, date=date) %}{% endif %}
+        {% if notes is defined and notes %}{% set d = dict(d, notes=notes) %}{% endif %}
+        {{ d }}
+
 # For examples/dashboard_multi.yaml: log the usual setup (or repeat the last restring)
 # for the racket picked in input_select.racket.
 restring_selected_racket:

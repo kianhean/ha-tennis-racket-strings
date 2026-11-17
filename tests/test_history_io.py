@@ -79,6 +79,7 @@ async def test_export_and_import_round_trip(
     resp = await _call(hass, "import_history", config_entry_id=aero2, csv=both["csv"])
     assert resp == {
         "racket": "Aero",
+        "contents": "restrings",
         "imported": 1,
         "skipped_duplicates": 0,
         "skipped_other_rackets": 1,
@@ -146,3 +147,64 @@ async def test_import_errors(
     assert err.value.translation_key == key
     hist = await _call(hass, "get_history", config_entry_id=racket)
     assert hist["restring_count"] == 0
+
+
+async def test_play_sessions_round_trip(hass: HomeAssistant) -> None:
+    aero = await _racket(hass, "Aero")
+    blade = await _racket(hass, "Blade")
+    one = await _call(hass, "export_history", config_entry_id=aero)
+    assert "play_file" not in one  # No sessions, no second file
+
+    for entry_id in (aero, blade):
+        result = await hass.config_entries.options.async_init(entry_id)
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tension_unit": "lbs", "play": {"tracking": "logged"}}
+        )
+        await hass.async_block_till_done()
+    await _call(hass, "log_play", config_entry_id=aero, hours=1.5, date="2026-03-01")
+    await _call(
+        hass,
+        "log_play",
+        config_entry_id=aero,
+        hours=2,
+        date="2026-03-03",
+        notes="Match, 3 sets",
+    )
+    await _call(hass, "log_play", config_entry_id=blade, hours=1, date="2026-03-02")
+
+    both = await _call(hass, "export_history")
+    assert both["play_sessions"] == 3
+    assert Path(both["play_file"]).name.endswith("-play.csv")
+    assert both["play_csv"].splitlines()[0] == "racket,id,date,hours,notes"
+    assert '"Match, 3 sets"' in both["play_csv"]
+
+    # Back into the same racket: all duplicates
+    resp = await _call(
+        hass, "import_history", config_entry_id=aero, file=both["play_file"]
+    )
+    assert resp == {
+        "racket": "Aero",
+        "contents": "play_sessions",
+        "imported": 0,
+        "skipped_duplicates": 2,
+        "skipped_other_rackets": 1,
+    }
+
+    # A spreadsheet: "Duration" heading, no IDs; the same session twice is one
+    sheet = "Date;Duration;Notes\n2026-03-01;1,5;\n2026-03-05;1;Drills\n2026-03-05;1;Drills\n"
+    resp = await _call(hass, "import_history", config_entry_id=aero, csv=sheet)
+    assert resp["imported"] == 1 and resp["skipped_duplicates"] == 2
+    entry = hass.config_entries.async_get_entry(aero)
+    assert [(s["date"], s["hours"]) for s in entry.runtime_data.sessions] == [
+        ("2026-03-01", 1.5),
+        ("2026-03-03", 2),
+        ("2026-03-05", 1),
+    ]
+
+    with pytest.raises(ServiceValidationError, match="Row 2"):
+        await _call(
+            hass,
+            "import_history",
+            config_entry_id=aero,
+            csv="date,hours\n2026-03-01,30\n",
+        )

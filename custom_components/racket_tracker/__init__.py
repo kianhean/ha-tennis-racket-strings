@@ -66,9 +66,12 @@ from .const import (
 from .dataset import async_schedule_refresh
 from .history import RacketHistory, new_restring_id, with_image_url
 from .history_io import (
+    PLAY_COLUMNS,
     async_read_import,
     async_write_export,
+    is_play_csv,
     parse_csv,
+    parse_play_csv,
     to_csv,
 )
 from .images import (
@@ -615,7 +618,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ]
         text = to_csv(rows)
         path = await async_write_export(hass, name, text)
-        return {"file": str(path), "restrings": len(rows), "csv": text}
+        response: dict[str, Any] = {
+            "file": str(path),
+            "restrings": len(rows),
+            "csv": text,
+        }
+        sessions = [
+            (entry.title, session)
+            for entry in entries
+            for session in entry.runtime_data.sessions
+        ]
+        if sessions:
+            play_text = to_csv(sessions, PLAY_COLUMNS)
+            play_path = await async_write_export(hass, name, play_text, "-play")
+            response |= {
+                "play_file": str(play_path),
+                "play_sessions": len(sessions),
+                "play_csv": play_text,
+            }
+        return response
 
     async def import_history(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
@@ -624,6 +645,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         else:
             text = call.data["csv"]
         history = entry.runtime_data
+        if is_play_csv(text):
+            sessions, duplicates, other = parse_play_csv(
+                text, entry.title, history.sessions
+            )
+            return {
+                "racket": entry.title,
+                "contents": "play_sessions",
+                "imported": await history.async_add_sessions(sessions),
+                "skipped_duplicates": duplicates,
+                "skipped_other_rackets": other,
+            }
         records, duplicates, other = parse_csv(
             text,
             entry.title,
@@ -634,6 +666,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         imported = await history.async_add_many(records)
         return {
             "racket": entry.title,
+            "contents": "restrings",
             "imported": imported,
             "skipped_duplicates": duplicates,
             "skipped_other_rackets": other,

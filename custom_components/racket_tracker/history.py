@@ -170,6 +170,18 @@ class RacketHistory:
         await self._async_commit()
         return new
 
+    async def async_add_sessions(self, sessions: list[dict[str, Any]]) -> int:
+        """Add several play sessions (an import) with one save; returns the count."""
+        now = dt_util.utcnow().isoformat()
+        for session in sessions:
+            self.sessions.append(
+                {"id": session.pop("id", None) or new_restring_id(), "created": now}
+                | session
+            )
+        if sessions:
+            await self._async_commit()
+        return len(sessions)
+
     async def async_delete_session(self, session_id: str) -> dict[str, Any] | None:
         """Delete a play session and persist; returns it, or None if not found."""
         if (

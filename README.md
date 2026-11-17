@@ -401,6 +401,13 @@ data:
 - Every row is checked first: one bad row stops the import with its row number, and nothing is added.
 - No `racket_tracker_restrung` events fire, so blueprints don't announce old restrings.
 
+**Play sessions.** If a racket has [logged sessions](#logging-play-sessions-instead), the export
+also writes `strung-<racket>-<time>-play.csv` (columns `racket`, `id`, `date`, `hours`, `notes`)
+and returns `play_file`, `play_sessions` and `play_csv`. Importing that file (or any CSV with
+`date` and `hours` columns and no `main_string`) adds play sessions instead of restrings; the
+response says which (`contents`). A session with the same ID, or the same date, hours and notes,
+is skipped.
+
 ## Restring due
 
 Under **Restring reminder** (when adding the racket or under **Configure**), set one or more rules.
@@ -433,8 +440,8 @@ it to a **Calendar** card, or use it in calendar triggers. Event text is in Engl
 
 ### One-click blueprints
 
-Import a blueprint, then create an automation from it and pick your racket's sensor from the
-drop-down. For the notify action, enter your phone's, for example `notify.mobile_app_your_phone`.
+Import a blueprint, then create an automation from it and pick your racket (or its sensor) from
+the drop-down. For the notify action, enter your phone's, for example `notify.mobile_app_your_phone`.
 
 | Blueprint | What it does | |
 |---|---|---|
@@ -443,6 +450,8 @@ drop-down. For the notify action, enter your phone's, for example `notify.mobile
 | 📸 **Restring logged** | A notification, with the photo, every time a restring is logged (one racket or all) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_logged.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_logged.yaml blueprint"></a> |
 | 🎾 **Racket picker** | Keep a dropdown helper filled with your rackets, for the [multi-racket dashboard](#several-rackets-pick-one-from-a-dropdown) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fracket_picker.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the racket_picker.yaml blueprint"></a> |
 | ⭐ **Rate your strings** | A few days after a restring, remind you to rate it if you haven't | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frate_strings.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the rate_strings.yaml blueprint"></a> |
+| ⏱️ **Ask how long you played** | On the days and time you pick, a phone notification with 1 h / 1.5 h / 2 h / Didn't play buttons; a tap [logs the session](#logging-play-sessions-instead). Needs the Companion app | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fplay_prompt.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the play_prompt.yaml blueprint"></a> |
+| 📅 **Log play from your calendar** | When a calendar event with "tennis" (or your keyword) in its title ends, log a session as long as the event (capped, all-day events skipped) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fplay_from_calendar.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the play_from_calendar.yaml blueprint"></a> |
 
 The blueprints live in [`blueprints/automation/racket_tracker/`](blueprints/automation/racket_tracker)
 and need Home Assistant 2025.7 or newer.
@@ -482,7 +491,7 @@ actions:
 
 There's no automatic dashboard: you add the example view yourself. It takes a minute:
 
-1. Add the two scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
+1. Add the scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
    then reload them (**Developer tools → YAML → Scripts**).
 2. **Settings → Dashboards → Add dashboard → New dashboard from scratch**, name it *Rackets*, and open it.
 3. **✏️ → ⋮ → Raw configuration editor**, replace everything with `views:` and paste the contents of
@@ -505,6 +514,12 @@ Home Assistant's built-in cards:
 
 A test checks that every entity it uses exists. The screenshot at the top is this view in Home
 Assistant 2026.9 with example data (the photos are placeholders).
+
+**Logged play.** For a racket that counts [logged sessions](#logging-play-sessions-instead), add
+the **Play** section from [`examples/dashboard_play.yaml`](examples/dashboard_play.yaml) (paste it
+under `sections:`): hours played on these strings, the estimated tension, an **I played** button
+(the usual session length, today), **Log play…** (the `log_play` script's form, for any length or
+day), the last session and a daily graph of hours played.
 
 ### Several rackets: pick one from a dropdown
 
@@ -584,8 +599,8 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `racket_tracker.log_play` | Log a play session (racket, hours, optional date, notes); needs [logged sessions](#logging-play-sessions-instead) | Optional: the session, including its `id` |
 | `racket_tracker.delete_play` | Delete a play session (`session_id`, else the one logged last) | Optional: the deleted session |
 | `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]`, `play_sessions[]` (if any) |
-| `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv` |
-| `racket_tracker.import_history` | Add restrings from a CSV file or text ([details](#import-and-export)) | Optional: `imported`, `skipped_duplicates`, `skipped_other_rackets` |
+| `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv`; with play sessions also `play_file`, `play_sessions`, `play_csv` |
+| `racket_tracker.import_history` | Add restrings, or play sessions, from a CSV file or text ([details](#import-and-export)) | Optional: `contents`, `imported`, `skipped_duplicates`, `skipped_other_rackets` |
 
 Restring IDs are in the `history` attribute and in the action responses.
 

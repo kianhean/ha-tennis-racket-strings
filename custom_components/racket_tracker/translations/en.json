@@ -769,7 +769,7 @@
     },
     "export_history": {
       "name": "Export history",
-      "description": "Save restring history as a CSV file in /config/racket_tracker/exports (photos aren't included). The file path and the CSV text are in the response.",
+      "description": "Save restring history as a CSV file in /config/racket_tracker/exports (photos aren't included). Logged play sessions, if any, go to a second file ending in -play.csv. The file paths and the CSV text are in the response.",
       "fields": {
         "config_entry_id": {
           "name": "Racket",
@@ -779,7 +779,7 @@
     },
     "import_history": {
       "name": "Import history",
-      "description": "Add restrings from CSV: an export, or a spreadsheet with date, main_string and main_tension columns (optional: cross_string, cross_tension, tension_unit, cost, stringer, rating, broken_date, notes). Restrings already logged are skipped. No restrung events are fired.",
+      "description": "Add restrings from CSV: an export, or a spreadsheet with date, main_string and main_tension columns (optional: cross_string, cross_tension, tension_unit, cost, stringer, rating, broken_date, notes). A CSV with date and hours columns (and no main_string) adds play sessions instead, e.g. a -play.csv export. Rows already logged are skipped. No restrung events are fired.",
       "fields": {
         "config_entry_id": {
           "name": "Racket",

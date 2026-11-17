@@ -10,7 +10,6 @@ from homeassistant.util import dt as dt_util
 from . import RacketConfigEntry
 from .specs import effective_specs
 from .stats import summary
-from .tension import play_settings
 
 
 async def async_get_config_entry_diagnostics(
@@ -26,9 +25,10 @@ async def async_get_config_entry_diagnostics(
         "total_cost": history.total_cost,
         "stats": summary(
             history.restrings,
-            play_settings(entry.options, history.latest),
+            history.play_settings(entry.options, history.latest),
             dt_util.now().date(),
         ),
         # Stored records: no signed photo URLs in a file users share
         "restrings": list(reversed(history.restrings)),
+        "play_sessions": list(reversed(history.sessions)),
     }

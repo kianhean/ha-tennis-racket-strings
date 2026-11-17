@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from datetime import date
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -13,12 +14,15 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTR_COST,
     ATTR_DATE,
+    ATTR_HOURS,
     ATTR_IMAGE,
     ATTR_IMAGE_URL,
     DOMAIN,
     STORAGE_VERSION,
 )
+from .due import Due, next_due
 from .images import image_url
+from .tension import PlaySettings, play_settings
 
 
 def with_image_url(hass: HomeAssistant, record: dict[str, Any]) -> dict[str, Any]:
@@ -46,12 +50,15 @@ class RacketHistory:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}"
         )
         self.restrings: list[dict[str, Any]] = []
+        # Logged play sessions: {id, created, date, hours, notes?}, by date
+        self.sessions: list[dict[str, Any]] = []
         self._listeners: list[Callable[[], None]] = []
 
     async def async_load(self) -> None:
         """Load history from disk."""
         data = await self._store.async_load()
         self.restrings = list((data or {}).get("restrings", []))
+        self.sessions = list((data or {}).get("sessions", []))
         self._sort()
 
     async def async_remove(self) -> None:
@@ -84,6 +91,24 @@ class RacketHistory:
     def get(self, restring_id: str) -> dict[str, Any] | None:
         """Return a restring by id."""
         return next((r for r in self.restrings if r["id"] == restring_id), None)
+
+    @property
+    def play_log(self) -> tuple[tuple[date, float], ...]:
+        """Logged play sessions as (date, hours), oldest first."""
+        return tuple(
+            (date.fromisoformat(s[ATTR_DATE]), float(s[ATTR_HOURS]))
+            for s in self.sessions
+        )
+
+    def play_settings(
+        self, options: Mapping[str, Any], record: dict[str, Any] | None
+    ) -> PlaySettings | None:
+        """Play settings for a restring, with the logged sessions up to today."""
+        return play_settings(options, record, self.play_log, dt_util.now().date())
+
+    def next_due(self, options: Mapping[str, Any]) -> Due | None:
+        """When the current strings are due (logged sessions up to today)."""
+        return next_due(self.latest, options, self.play_log, dt_util.now().date())
 
     def newest_first(self) -> list[dict[str, Any]]:
         """Return a copy of the history, most recent first (with photo URLs)."""
@@ -134,14 +159,39 @@ class RacketHistory:
         await self._async_commit()
         return True
 
+    async def async_add_session(self, session: dict[str, Any]) -> dict[str, Any]:
+        """Log a play session (date, hours, notes) and persist."""
+        new = {
+            "id": new_restring_id(),
+            "created": dt_util.utcnow().isoformat(),
+            **session,
+        }
+        self.sessions.append(new)
+        await self._async_commit()
+        return new
+
+    async def async_delete_session(self, session_id: str) -> dict[str, Any] | None:
+        """Delete a play session and persist; returns it, or None if not found."""
+        if (
+            session := next((s for s in self.sessions if s["id"] == session_id), None)
+        ) is None:
+            return None
+        self.sessions.remove(session)
+        await self._async_commit()
+        return session
+
     async def _async_commit(self) -> None:
         self._sort()
-        await self._store.async_save({"restrings": self.restrings})
+        data: dict[str, Any] = {"restrings": self.restrings}
+        if self.sessions:
+            data["sessions"] = self.sessions
+        await self._store.async_save(data)
         for listener in list(self._listeners):
             listener()
 
     def _sort(self) -> None:
         self.restrings.sort(key=lambda r: (r.get(ATTR_DATE, ""), r.get("created", "")))
+        self.sessions.sort(key=lambda s: (s[ATTR_DATE], s.get("created", "")))
 
     # ---------------------------------------------------------------- listeners
 

@@ -14,6 +14,9 @@
       },
       "strings_broke": {
         "default": "mdi:link-variant-off"
+      },
+      "log_play": {
+        "default": "mdi:tennis-ball"
       }
     },
     "calendar": {
@@ -137,6 +140,12 @@
     },
     "calibrate_tension": {
       "service": "mdi:tune-variant"
+    },
+    "log_play": {
+      "service": "mdi:tennis-ball"
+    },
+    "delete_play": {
+      "service": "mdi:timer-remove-outline"
     },
     "update_restring": {
       "service": "mdi:pencil"

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from .const import (
@@ -19,7 +19,7 @@ from .const import (
     ATTR_MAIN_STRING,
     ATTR_RATING,
 )
-from .tension import PlaySettings
+from .tension import TRACKING_LOGGED, PlaySettings, hours_played
 
 
 @dataclass(frozen=True)
@@ -119,10 +119,35 @@ def restrings_in_year(records: list[dict[str, Any]], year: int) -> int:
 def hours_played_total(
     records: list[dict[str, Any]], settings: PlaySettings, today: date
 ) -> float:
-    """Estimated hours played since the first restring."""
+    """Hours played (estimated or logged) since the first restring."""
     if not records or (first := _date(records[0].get(ATTR_DATE))) is None:
         return 0.0
-    return settings.hours_per_week * max((today - first).days, 0) / 7
+    return hours_played(settings, first, today)
+
+
+def average_life_hours(
+    records: list[dict[str, Any]], settings: PlaySettings
+) -> float | None:
+    """Average hours a finished string bed was played (estimated or logged).
+
+    A session on the day of the next restring counts for the new strings; one
+    on the day the strings broke, for the broken ones.
+    """
+    hours = []
+    for life in string_lives(records):
+        start = date.fromisoformat(life.record[ATTR_DATE])
+        end = start + timedelta(days=life.days)
+        if settings.tracking == TRACKING_LOGGED:
+            hours.append(
+                sum(
+                    h
+                    for d, h in settings.sessions
+                    if start <= d < end or (d == end and (life.broken or d == start))
+                )
+            )
+        else:
+            hours.append(hours_played(settings, start, end))
+    return _average(hours)
 
 
 def cost_per_hour(
@@ -195,8 +220,5 @@ def summary(
     }
     if settings is not None:
         out["cost_per_hour"] = cost_per_hour(records, settings, today)
-        life = out["average_string_life_days"]
-        out["average_string_life_hours"] = (
-            round(life * settings.hours_per_week / 7, 1) if life is not None else None
-        )
+        out["average_string_life_hours"] = average_life_hours(records, settings)
     return out

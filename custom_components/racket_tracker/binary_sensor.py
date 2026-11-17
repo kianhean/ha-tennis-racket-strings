@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import RacketConfigEntry
-from .due import Due, due_rules, next_due
+from .due import Due, due_rules
 from .entity import DailyRacketEntity, async_remove_entity
 
 KEY = "restring_due"
@@ -33,7 +33,7 @@ class RestringDueSensor(DailyRacketEntity, BinarySensorEntity):
     """On when the current strings are due to be replaced."""
 
     def _due(self) -> Due | None:
-        return next_due(self._history.latest, self._entry.options)
+        return self._history.next_due(self._entry.options)
 
     @property
     def is_on(self) -> bool | None:

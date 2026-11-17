@@ -73,10 +73,14 @@ from .tension import (
     CONF_INITIAL_LOSS,
     CONF_PLAY,
     CONF_RELAXATION_LOSS,
+    CONF_SESSION_HOURS,
     CONF_STRING_TYPE,
+    CONF_TRACKING,
     CONF_TWU_LOSS,
     PRESET_MINOR_VERSION,
     STRING_TYPES,
+    TRACKING_LOGGED,
+    TRACKINGS,
 )
 
 CONF_LOOKUP = "lookup"
@@ -142,7 +146,16 @@ def _number(
 # How much the racket is played; enables the estimated tension sensors.
 PLAY_SCHEMA = vol.Schema(
     {
+        # Hours per week, or play sessions logged with log_play / the button
+        vol.Optional(CONF_TRACKING): SelectSelector(
+            SelectSelectorConfig(
+                options=TRACKINGS,
+                mode=SelectSelectorMode.LIST,
+                translation_key=CONF_TRACKING,
+            )
+        ),
         vol.Optional(CONF_HOURS_PER_WEEK): _number(0, 60, 0.5, "h"),
+        vol.Optional(CONF_SESSION_HOURS): _number(0.25, 12, 0.25, "h"),
         vol.Optional(CONF_STRING_TYPE): SelectSelector(
             SelectSelectorConfig(
                 options=list(STRING_TYPES),
@@ -243,8 +256,11 @@ def _clean(user_input: dict[str, Any], errors: dict[str, str]) -> dict[str, Any]
     low, high = specs.get("tension_min"), specs.get("tension_max")
     if low is not None and high is not None and low > high:
         errors["base"] = "tension_range"
-    hours = (data.get(CONF_PLAY) or {}).get(CONF_HOURS_PER_WEEK)
-    if not hours and any(k in PLAY_RULES for k in data.get(CONF_DUE) or {}):
+    play = data.get(CONF_PLAY) or {}
+    counts_hours = play.get(CONF_HOURS_PER_WEEK) or play.get(CONF_TRACKING) == (
+        TRACKING_LOGGED
+    )
+    if not counts_hours and any(k in PLAY_RULES for k in data.get(CONF_DUE) or {}):
         errors["base"] = "due_needs_play"
     setup = data.get(CONF_SETUP) or {}
     if setup and not (setup.get(ATTR_MAIN_STRING) and setup.get(ATTR_MAIN_TENSION)):

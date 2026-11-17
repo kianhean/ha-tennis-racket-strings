@@ -6,7 +6,13 @@ strung tension, capped at 50 %):
     loss = initial                                   first day after stringing
          + relaxation × log10(days since stringing)  from day 1, played or not
          + first hour × log2(1 + hours played)        from play
-    hours played = hours per week × days ÷ 7
+    hours played = hours per week × days ÷ 7          (tracking "weekly")
+                 = the play sessions logged since     (tracking "logged")
+                   stringing (log_play)
+
+With logged sessions, only the hours logged up to today count; a forecast (the
+due date) adds the hours per week after today, or without it the pace of the
+sessions logged in the last four weeks.
 
 Where the shape and the numbers come from:
 
@@ -77,7 +83,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from .const import ATTR_CROSS_TENSION, ATTR_DATE, ATTR_MAIN_STRING, ATTR_MAIN_TENSION
@@ -90,6 +96,16 @@ CONF_INITIAL_LOSS = "initial_tension_loss"
 CONF_FIRST_HOUR_LOSS = "first_hour_loss"
 CONF_RELAXATION_LOSS = "relaxation_loss"
 CONF_TWU_LOSS = "twu_tension_loss"
+# How hours played are counted: hours per week, or logged play sessions
+CONF_TRACKING = "tracking"
+TRACKING_WEEKLY = "weekly"
+TRACKING_LOGGED = "logged"
+TRACKINGS = [TRACKING_WEEKLY, TRACKING_LOGGED]
+# Hours the "Log play session" button logs
+CONF_SESSION_HOURS = "session_hours"
+DEFAULT_SESSION_HOURS = 1.5
+# With logged sessions and no hours per week, the forecast uses this window's pace
+PACE_DAYS = 28
 # Removed in 0.4.0 (linear model); migrated to first_hour_loss
 CONF_LOSS_PER_HOUR = "tension_loss_per_hour"
 
@@ -151,6 +167,12 @@ class PlaySettings:
     rates: LossRates
     string_type_source: str = SOURCE_DEFAULT
     twu_tension_loss: float | None = None
+    tracking: str = TRACKING_WEEKLY
+    # Logged play sessions (date, hours), sorted by date; tracking "logged" only
+    sessions: tuple[tuple[date, float], ...] = ()
+    # Sessions count up to this day; after it, hours_per_week is the forecast.
+    # None: no forecast (only what was logged).
+    logged_until: date | None = None
 
 
 @dataclass(frozen=True)
@@ -163,18 +185,54 @@ class Estimate:
     cross_tension: float | None
 
 
+def tracks_play(options: Mapping[str, Any]) -> bool:
+    """Whether the racket counts hours played (hours per week or logged sessions)."""
+    play = options.get(CONF_PLAY) or {}
+    return (
+        play.get(CONF_TRACKING) == TRACKING_LOGGED
+        or play.get(CONF_HOURS_PER_WEEK) is not None
+    )
+
+
+def logs_play(options: Mapping[str, Any]) -> bool:
+    """Whether the racket counts logged play sessions instead of hours per week."""
+    return (options.get(CONF_PLAY) or {}).get(CONF_TRACKING) == TRACKING_LOGGED
+
+
+def session_hours(options: Mapping[str, Any]) -> float:
+    """Hours the "Log play session" button logs."""
+    value = (options.get(CONF_PLAY) or {}).get(CONF_SESSION_HOURS)
+    return float(value) if value else DEFAULT_SESSION_HOURS
+
+
+def logged_pace(sessions: tuple[tuple[date, float], ...], today: date) -> float:
+    """Hours per week logged in the last PACE_DAYS days (today included)."""
+    since = today - timedelta(days=PACE_DAYS)
+    hours = sum(h for d, h in sessions if since < d <= today)
+    return round(hours * 7 / PACE_DAYS, 2)
+
+
 def play_settings(
-    options: Mapping[str, Any], record: Mapping[str, Any] | None = None
+    options: Mapping[str, Any],
+    record: Mapping[str, Any] | None = None,
+    sessions: tuple[tuple[date, float], ...] = (),
+    today: date | None = None,
 ) -> PlaySettings | None:
-    """The racket's play settings, or None if hours per week isn't set.
+    """The racket's play settings, or None if it doesn't count hours played.
 
     Without a string type in the options, the material of the given restring's
     main string is used if the string catalog knows it, else polyester.
+    With logged sessions (tracking "logged"), pass them and today: hours per
+    week then only forecasts the hours after today, and without it the pace of
+    the last four weeks' sessions does.
     """
+    if not tracks_play(options):
+        return None
     play = options.get(CONF_PLAY) or {}
     hours = play.get(CONF_HOURS_PER_WEEK)
+    logged = logs_play(options)
     if hours is None:
-        return None
+        hours = logged_pace(sessions, today) if logged and today else 0
     if (string_type := play.get(CONF_STRING_TYPE)) in STRING_TYPES:
         source = SOURCE_RACKET
     elif (
@@ -209,7 +267,26 @@ def play_settings(
         rates,
         string_type_source=source,
         twu_tension_loss=float(twu) if twu else None,
+        tracking=TRACKING_LOGGED if logged else TRACKING_WEEKLY,
+        sessions=tuple(sessions) if logged else (),
+        logged_until=today if logged else None,
     )
+
+
+def hours_played(settings: PlaySettings, start: date, end: date) -> float:
+    """Hours played from start (a restring's date) to end, both included.
+
+    Weekly: hours per week pro rata. Logged: the sessions in that range up to
+    logged_until, plus hours per week for the days after it (a forecast).
+    """
+    days = max((end - start).days, 0)
+    if settings.tracking != TRACKING_LOGGED:
+        return settings.hours_per_week * days / 7
+    last = end if settings.logged_until is None else min(end, settings.logged_until)
+    hours = sum(h for d, h in settings.sessions if start <= d <= last)
+    if end > last:
+        hours += settings.hours_per_week * (end - max(last, start)).days / 7
+    return hours
 
 
 def twu_scale(twu_loss: float, string_type: str) -> float:
@@ -259,7 +336,7 @@ def estimate(
     if not record or not record.get(ATTR_DATE):
         return None
     days = _days(record, today)
-    hours = settings.hours_per_week * days / 7
+    hours = hours_played(settings, date.fromisoformat(record[ATTR_DATE]), today)
     loss = round(min(loss_percent(settings.rates, days, hours), MAX_LOSS), 1)
     return Estimate(
         hours_played=round(hours, 1),
@@ -282,7 +359,8 @@ def calibrate(
         raise ValueError("no strung tension")
     measured_loss = (1 - measured / strung) * 100
     days = _days(record, on)
-    model_loss = loss_percent(settings.rates, days, settings.hours_per_week * days / 7)
+    hours = hours_played(settings, date.fromisoformat(record[ATTR_DATE]), on)
+    model_loss = loss_percent(settings.rates, days, hours)
     if measured_loss <= 0 or model_loss <= 0 or measured_loss >= MAX_LOSS:
         raise ValueError("out of range")
     factor = measured_loss / model_loss

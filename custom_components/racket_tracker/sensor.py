@@ -37,13 +37,14 @@ from .const import (
     TENSION_UNIT_LBS,
 )
 from .dataset import ATTRIBUTION
-from .due import due_rules, next_due
+from .due import due_rules
 from .entity import DailyRacketEntity, async_remove_entity, racket_device_info
 from .history import RacketHistory, with_image_url
 from .specs import SOURCE_DATASET, SPECS, Spec, effective_specs, spec_unit
 from .stats import (
     average_days_to_break,
     average_life_days,
+    average_life_hours,
     best_rated_string,
     breakage_rate,
     breakages,
@@ -55,7 +56,13 @@ from .stats import (
     string_counts,
     strings_label,
 )
-from .tension import Estimate, PlaySettings, estimate, play_settings
+from .tension import (
+    TRACKING_LOGGED,
+    Estimate,
+    PlaySettings,
+    estimate,
+    tracks_play,
+)
 
 
 def _latest(history: RacketHistory, key: str) -> Any:
@@ -214,10 +221,9 @@ class StatsSensorDescription(SensorEntityDescription):
 def _life_attrs(
     records: list[dict[str, Any]], settings: PlaySettings | None, _today: date
 ) -> dict[str, Any]:
-    life = average_life_days(records)
     return {
-        "average_hours_played": round(life * settings.hours_per_week / 7, 1)
-        if settings is not None and life is not None
+        "average_hours_played": average_life_hours(records, settings)
+        if settings is not None
         else None,
         "average_days_to_break": average_days_to_break(records),
     }
@@ -313,7 +319,7 @@ async def async_setup_entry(
         async_remove_entity(hass, Platform.SENSOR, entry, "next_restring")
 
     # Estimates need hours of play per week; drop them when that's cleared.
-    if play_settings(entry.options) is None:
+    if not tracks_play(entry.options):
         for desc in PLAY_SENSORS:
             unique_id = f"{entry.entry_id}_{desc.key}"
             if entity_id := registry.async_get_entity_id("sensor", DOMAIN, unique_id):
@@ -321,7 +327,7 @@ async def async_setup_entry(
     else:
         async_add_entities(PlaySensor(entry, desc) for desc in PLAY_SENSORS)
 
-    has_play = play_settings(entry.options) is not None
+    has_play = tracks_play(entry.options)
     for stat in STATS_SENSORS:
         if stat.needs_play and not has_play:
             async_remove_entity(hass, Platform.SENSOR, entry, stat.key)
@@ -466,7 +472,7 @@ class PlaySensor(SensorEntity):
     @property
     def _settings(self) -> PlaySettings:
         """Settings for the current strings (their material may differ)."""
-        settings = play_settings(self._options, self._history.latest)
+        settings = self._history.play_settings(self._options, self._history.latest)
         assert settings is not None
         return settings
 
@@ -485,6 +491,7 @@ class PlaySensor(SensorEntity):
         """Show the inputs, so the estimate can be checked."""
         settings = self._settings
         attrs: dict[str, Any] = {
+            "tracking": settings.tracking,
             "hours_per_week": settings.hours_per_week,
             "string_type": settings.string_type,
             "string_type_source": settings.string_type_source,
@@ -499,6 +506,15 @@ class PlaySensor(SensorEntity):
             attrs["strung_cross_tension"] = _latest(self._history, ATTR_CROSS_TENSION)
             attrs["estimated_cross_tension"] = est.cross_tension if est else None
             attrs[ATTR_DATE] = _latest(self._history, ATTR_DATE)
+        if settings.tracking == TRACKING_LOGGED and self.entity_description.key == (
+            "hours_played"
+        ):
+            since = _latest(self._history, ATTR_DATE)
+            sessions = [
+                s for s in self._history.sessions if since and s[ATTR_DATE] >= since
+            ]
+            attrs["sessions"] = len(sessions)
+            attrs["last_session"] = sessions[-1][ATTR_DATE] if sessions else None
         return attrs
 
 
@@ -510,7 +526,7 @@ class NextRestringSensor(DailyRacketEntity, SensorEntity):
     @property
     def native_value(self) -> date | None:
         """Return the due date."""
-        due = next_due(self._history.latest, self._entry.options)
+        due = self._history.next_due(self._entry.options)
         return due.date if due else None
 
 
@@ -538,7 +554,7 @@ class StatsSensor(DailyRacketEntity, SensorEntity):
     def _args(self) -> tuple[list[dict[str, Any]], PlaySettings | None, date]:
         return (
             self._history.restrings,
-            play_settings(self._entry.options, self._history.latest),
+            self._history.play_settings(self._entry.options, self._history.latest),
             dt_util.now().date(),
         )
 

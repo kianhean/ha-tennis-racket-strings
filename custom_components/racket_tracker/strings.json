@@ -39,9 +39,11 @@
           },
           "play": {
             "name": "Play and tension loss (optional)",
-            "description": "Set how much you play this racket to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
+            "description": "Set how much you play this racket (an average per week, or log each session) to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
             "data": {
+              "tracking": "How to count hours played",
               "hours_per_week": "Hours of play per week",
+              "session_hours": "Usual session length",
               "string_type": "String type",
               "initial_tension_loss": "Initial tension loss",
               "first_hour_loss": "Loss in the first hour of play",
@@ -49,7 +51,9 @@
               "twu_tension_loss": "String's tension loss in the TWU database"
             },
             "data_description": {
-              "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket.",
+              "tracking": "Hours per week: an estimate from your average. Logged sessions: only the play you log with the **Log play session** button or the **Log play** action counts.",
+              "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket. With logged sessions it only forecasts the due date; if empty, the pace of the sessions logged in the last 4 weeks does.",
+              "session_hours": "With logged sessions: what the **Log play session** button logs. Default 1.5 h.",
               "string_type": "Sets the default rates. If empty: the main string's material when the built-in string list knows it, else polyester. For a hybrid, pick the mains.",
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 6%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1.5%.",
@@ -135,7 +139,7 @@
       "tension_range": "Minimum tension must not be above the maximum.",
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
       "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
-      "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
+      "due_needs_play": "Set hours of play per week, or count logged sessions, to restring after hours of play or by estimated tension.",
       "setup_incomplete": "The usual setup needs at least a main string and a main tension.",
       "current_incomplete": "The current strings need at least a main string and a main tension."
     },
@@ -183,9 +187,11 @@
           },
           "play": {
             "name": "Play and tension loss (optional)",
-            "description": "Set how much you play this racket to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
+            "description": "Set how much you play this racket (an average per week, or log each session) to estimate its current tension. Strings lose tension at once, then a little more every time their age multiplies by 10, and with play: most in the first hours. Leave the rates empty to use the string type's defaults, or measure your tension and run **Calibrate tension estimate**.",
             "data": {
+              "tracking": "How to count hours played",
               "hours_per_week": "Hours of play per week",
+              "session_hours": "Usual session length",
               "string_type": "String type",
               "initial_tension_loss": "Initial tension loss",
               "first_hour_loss": "Loss in the first hour of play",
@@ -193,7 +199,9 @@
               "twu_tension_loss": "String's tension loss in the TWU database"
             },
             "data_description": {
-              "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket.",
+              "tracking": "Hours per week: an estimate from your average. Logged sessions: only the play you log with the **Log play session** button or the **Log play** action counts.",
+              "hours_per_week": "Average, e.g. 4. Use 0 for a spare racket. With logged sessions it only forecasts the due date; if empty, the pace of the sessions logged in the last 4 weeks does.",
+              "session_hours": "With logged sessions: what the **Log play session** button logs. Default 1.5 h.",
               "string_type": "Sets the default rates. If empty: the main string's material when the built-in string list knows it, else polyester. For a hybrid, pick the mains.",
               "initial_tension_loss": "Lost in the first day after stringing. Default: polyester 10%, nylon 6%, gut 6%.",
               "first_hour_loss": "Lost in the first hour of play; each doubling of the hours played loses the same again. Default: polyester 3%, nylon 1.5%, gut 1.5%.",
@@ -271,7 +279,7 @@
       "tension_range": "Minimum tension must not be above the maximum.",
       "cannot_connect": "Couldn't reach the racket dataset. Try again later, or leave Look up empty.",
       "no_match": "No racket matches that. Try fewer words, e.g. just the model.",
-      "due_needs_play": "Set hours of play per week to restring after hours of play or by estimated tension.",
+      "due_needs_play": "Set hours of play per week, or count logged sessions, to restring after hours of play or by estimated tension.",
       "setup_incomplete": "The usual setup needs at least a main string and a main tension.",
       "current_incomplete": "The current strings need at least a main string and a main tension.",
       "current_after_broken": "The latest restring's strings broke before that date. Clear the broken date with Update restring first, or log a new restring."
@@ -289,6 +297,12 @@
         "polyester": "Polyester / co-poly",
         "nylon": "Nylon / multifilament / synthetic gut",
         "gut": "Natural gut"
+      }
+    },
+    "tracking": {
+      "options": {
+        "weekly": "Hours per week",
+        "logged": "Logged sessions"
       }
     }
   },
@@ -324,6 +338,9 @@
       },
       "strings_broke": {
         "name": "Strings broke"
+      },
+      "log_play": {
+        "name": "Log play session"
       }
     },
     "calendar": {
@@ -487,7 +504,7 @@
       "message": "Racket {racket} has no usual setup and no restrings to repeat. Fill in its usual main string and main tension under Controls, then press again."
     },
     "no_play_settings": {
-      "message": "Set hours of play per week for {racket} first (Configure \u2192 Play and tension loss)."
+      "message": "Set hours of play per week, or count logged sessions, for {racket} first (Configure \u2192 Play and tension loss)."
     },
     "cannot_calibrate": {
       "message": "Can't calibrate to {tension}: it must be below the strung tension ({strung}) and lose less than 50%."
@@ -506,6 +523,15 @@
     },
     "import_row": {
       "message": "Row {row} of the CSV: {reason}. Nothing was imported."
+    },
+    "not_logging_play": {
+      "message": "{racket} counts hours per week, not logged sessions. Set **How to count hours played** to Logged sessions (Configure \u2192 Play and tension loss) to log play."
+    },
+    "no_sessions": {
+      "message": "{racket} has no logged play sessions."
+    },
+    "session_not_found": {
+      "message": "No play session found with ID {session_id}."
     }
   },
   "services": {
@@ -612,6 +638,42 @@
         "date": {
           "name": "Date",
           "description": "When you measured it. Defaults to today."
+        }
+      }
+    },
+    "log_play": {
+      "name": "Log play",
+      "description": "Log time you played with a racket. Counts towards its hours played, estimated tension and restring due date when the racket counts logged sessions.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket you played with."
+        },
+        "hours": {
+          "name": "Hours",
+          "description": "How long you played, e.g. 1.5."
+        },
+        "date": {
+          "name": "Date",
+          "description": "When you played. Defaults to today."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Optional, e.g. match or practice."
+        }
+      }
+    },
+    "delete_play": {
+      "name": "Delete play session",
+      "description": "Delete a logged play session, by default the one logged last.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket the session was logged for."
+        },
+        "session_id": {
+          "name": "Session ID",
+          "description": "The session's ID (from Log play or Get history). Leave empty to delete the session logged last."
         }
       }
     },

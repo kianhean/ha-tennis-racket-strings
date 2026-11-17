@@ -251,6 +251,14 @@ async def test_racket_picker(hass: HomeAssistant, notify_calls) -> None:
     assert options() == ["Match racket"]
 
 
+async def _stop(hass: HomeAssistant) -> None:
+    """Turn the automation off: its time / calendar triggers keep timers running."""
+    await hass.services.async_call(
+        "automation", "turn_off", {"entity_id": "automation.test"}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+
 async def _logged_racket(hass: HomeAssistant) -> str:
     entry_id = await _add_racket(hass)
     result = await hass.config_entries.options.async_init(entry_id)
@@ -322,6 +330,7 @@ async def test_play_prompt(
     hass.bus.async_fire("mobile_app_notification_action", {"action": actions[3]})
     await hass.async_block_till_done()
     assert len(_sessions(hass, entry_id)) == 1
+    await _stop(hass)
 
 
 class _Calendar(CalendarEntity):
@@ -383,3 +392,4 @@ async def test_play_from_calendar(
         (today.isoformat(), 1.5, "Tennis with Sam"),
         (today.isoformat(), 4, "League TENNIS match"),
     ]
+    await _stop(hass)

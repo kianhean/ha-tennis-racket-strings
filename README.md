@@ -37,10 +37,10 @@
 | | | |
 |---|---|---|
 | 🔔 **Restring due**<br>Restring after N days, N hours of play, or when the estimated tension drops to a set value: a [due sensor and a calendar](#restring-due) | 🔁 **Usual setup**<br>Save your usual string job and [log it in one tap](#usual-setup) | 📅 **Calendar**<br>Every restring, and the next one due, in HA's calendar |
-| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, that you can calibrate with a measurement |
+| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, from your hours per week or the [play sessions you log](#logging-play-sessions-instead), that you can calibrate with a measurement |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
 | 🧶 **String suggestions**<br>Pick from [~810 strings](#string-suggestions) or type your own; the string's material sets the tension estimate | 💥 **Breakages and string life**<br>[One tap when strings break](#when-strings-break); average string life, breakage rate, spend this year, cost per hour and your favourite setup | 💾 **Import and export**<br>[CSV in and out](#import-and-export): back up, or bring your restring spreadsheet |
-| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
+| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, a nudge to rate your strings, and logging play from a notification or your calendar | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
 
 ## Installation
 
@@ -503,7 +503,7 @@ There's no automatic dashboard: you add the example view yourself. It takes a mi
 Home Assistant's built-in cards:
 
 - the racket photo, current strings, tension, string age, last restrung and total spent
-- the estimated tension now and how much has been lost (remove those two tiles if you don't set hours per week)
+- the estimated tension now and how much has been lost (remove those two tiles if you set neither hours per week nor [logged sessions](#logging-play-sessions-instead))
 - **Log restring** and **Rate strings** buttons (they open the script forms), and **Usual setup**,
   which logs your [usual setup](#usual-setup) for today after a confirmation
 - a **Schedule** column: Restring due, Next restring and a month calendar of restrings and the next

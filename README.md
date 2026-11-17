@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://hacs.xyz/docs/faq/custom_repositories"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Default-41BDF5.svg" alt="HACS Default"></a>
   <a href="https://github.com/kianhean/ha-tennis-racket-strings/releases"><img src="https://img.shields.io/github/v/release/kianhean/ha-tennis-racket-strings" alt="Latest release"></a>
   <a href="https://github.com/kianhean/ha-tennis-racket-strings/releases"><img src="https://img.shields.io/github/downloads/kianhean/ha-tennis-racket-strings/total" alt="Downloads"></a>
   <a href="https://analytics.home-assistant.io/custom_integrations.json"><img src="https://img.shields.io/badge/dynamic/json?label=active%20installs&color=41BDF5&query=%24.racket_tracker.total&url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json" alt="Active installs (Home Assistant analytics)"></a>
@@ -44,9 +44,10 @@
 
 ## Installation
 
-1. Use the **Open in HACS** button above, or in HACS go to **⋮ → Custom repositories**, add
-   `https://github.com/kianhean/ha-tennis-racket-strings` and pick the **Integration** category.
-2. Search for **Strung** and install it.
+Strung is in the default HACS list.
+
+1. Use the **Open in HACS** button above, or open HACS and search for **Strung**.
+2. Click **Download**.
 3. Restart Home Assistant.
 
 Requires **Home Assistant 2025.7** or newer.

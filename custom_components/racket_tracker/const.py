@@ -40,6 +40,9 @@ ATTR_REMOVE_IMAGE = "remove_image"
 # The date this string bed broke (None if it didn't)
 ATTR_BROKEN_DATE = "broken_date"
 ATTR_BROKEN = "broken"
+# Play session fields (log_play)
+ATTR_SESSION_ID = "session_id"
+ATTR_HOURS = "hours"
 
 EDITABLE_FIELDS = (
     ATTR_DATE,
@@ -73,6 +76,8 @@ SERVICE_REPEAT_RESTRING = "repeat_restring"
 SERVICE_CALIBRATE_TENSION = "calibrate_tension"
 SERVICE_EXPORT_HISTORY = "export_history"
 SERVICE_IMPORT_HISTORY = "import_history"
+SERVICE_LOG_PLAY = "log_play"
+SERVICE_DELETE_PLAY = "delete_play"
 
 # Events
 EVENT_RESTRUNG = f"{DOMAIN}_restrung"

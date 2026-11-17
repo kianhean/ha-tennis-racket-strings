@@ -34,6 +34,7 @@ from .const import (
     ATTR_CROSS_STRING,
     ATTR_CROSS_TENSION,
     ATTR_DATE,
+    ATTR_HOURS,
     ATTR_IMAGE,
     ATTR_MAIN_STRING,
     ATTR_MAIN_TENSION,
@@ -41,6 +42,7 @@ from .const import (
     ATTR_RATING,
     ATTR_REMOVE_IMAGE,
     ATTR_RESTRING_ID,
+    ATTR_SESSION_ID,
     ATTR_STRINGER,
     CONF_CURRENT,
     CONF_SETUP,
@@ -50,10 +52,12 @@ from .const import (
     EVENT_RESTRUNG,
     SERVICE_ADD_RESTRING,
     SERVICE_CALIBRATE_TENSION,
+    SERVICE_DELETE_PLAY,
     SERVICE_DELETE_RESTRING,
     SERVICE_EXPORT_HISTORY,
     SERVICE_GET_HISTORY,
     SERVICE_IMPORT_HISTORY,
+    SERVICE_LOG_PLAY,
     SERVICE_REPEAT_RESTRING,
     SERVICE_UPDATE_RESTRING,
     SETUP_FIELDS,
@@ -62,9 +66,12 @@ from .const import (
 from .dataset import async_schedule_refresh
 from .history import RacketHistory, new_restring_id, with_image_url
 from .history_io import (
+    PLAY_COLUMNS,
     async_read_import,
     async_write_export,
+    is_play_csv,
     parse_csv,
+    parse_play_csv,
     to_csv,
 )
 from .images import (
@@ -84,9 +91,10 @@ from .tension import (
     CONF_RELAXATION_LOSS,
     PRESET_MINOR_VERSION,
     calibrate,
+    logs_play,
     migrate_play_options,
     move_old_presets,
-    play_settings,
+    tracks_play,
     uses_old_presets,
 )
 
@@ -171,6 +179,24 @@ CALIBRATE_SCHEMA = vol.Schema(
         vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
         vol.Required("tension"): _TENSION,
         vol.Optional(ATTR_DATE): cv.date,
+    }
+)
+
+LOG_PLAY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Required(ATTR_HOURS): vol.All(
+            vol.Coerce(float), vol.Range(min=0.1, max=24), _whole
+        ),
+        vol.Optional(ATTR_DATE): cv.date,
+        vol.Optional(ATTR_NOTES): cv.string,
+    }
+)
+
+DELETE_PLAY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_SESSION_ID): cv.string,
     }
 )
 
@@ -390,6 +416,28 @@ def usual_setup(
     }
 
 
+async def async_log_play(
+    entry: RacketConfigEntry,
+    hours: float,
+    on: date | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    """Log a play session (log_play action, Log play session button)."""
+    if not logs_play(entry.options):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="not_logging_play",
+            translation_placeholders={"racket": entry.title},
+        )
+    session: dict[str, Any] = {
+        ATTR_DATE: (on or dt_util.now().date()).isoformat(),
+        ATTR_HOURS: _whole(float(hours)),
+    }
+    if notes:
+        session[ATTR_NOTES] = notes
+    return await entry.runtime_data.async_add_session(session)
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Register the integration's actions and the (login-only) photo view."""
     async_schedule_refresh(hass)
@@ -414,7 +462,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def calibrate_tension(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
-        if play_settings(entry.options) is None:
+        if not tracks_play(entry.options):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="no_play_settings",
@@ -426,7 +474,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_key="no_restrings",
                 translation_placeholders={"racket": entry.title},
             )
-        settings = play_settings(entry.options, latest)
+        settings = entry.runtime_data.play_settings(entry.options, latest)
         assert settings is not None
         measured = call.data["tension"]
         on = call.data.get(ATTR_DATE) or dt_util.now().date()
@@ -517,12 +565,44 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             "total_cost": history.total_cost,
             "stats": summary(
                 history.restrings,
-                play_settings(entry.options, history.latest),
+                history.play_settings(entry.options, history.latest),
                 dt_util.now().date(),
             ),
             "restrings": history.newest_first(),
         }
+        if history.sessions:
+            response["play_sessions"] = list(reversed(history.sessions))
         return response
+
+    async def log_play(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        session = await async_log_play(
+            entry,
+            call.data[ATTR_HOURS],
+            call.data.get(ATTR_DATE),
+            call.data.get(ATTR_NOTES),
+        )
+        return {"racket": entry.title, "session": session}
+
+    async def delete_play(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        history = entry.runtime_data
+        if (session_id := call.data.get(ATTR_SESSION_ID)) is None:
+            if not history.sessions:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_sessions",
+                    translation_placeholders={"racket": entry.title},
+                )
+            # The one logged last, not the one dated last
+            session_id = max(history.sessions, key=lambda s: s["created"])["id"]
+        if (session := await history.async_delete_session(session_id)) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="session_not_found",
+                translation_placeholders={"session_id": session_id},
+            )
+        return {"racket": entry.title, "session": session}
 
     async def export_history(call: ServiceCall) -> ServiceResponse:
         if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
@@ -538,7 +618,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ]
         text = to_csv(rows)
         path = await async_write_export(hass, name, text)
-        return {"file": str(path), "restrings": len(rows), "csv": text}
+        response: dict[str, Any] = {
+            "file": str(path),
+            "restrings": len(rows),
+            "csv": text,
+        }
+        sessions = [
+            (entry.title, session)
+            for entry in entries
+            for session in entry.runtime_data.sessions
+        ]
+        if sessions:
+            play_text = to_csv(sessions, PLAY_COLUMNS)
+            play_path = await async_write_export(hass, name, play_text, "-play")
+            response |= {
+                "play_file": str(play_path),
+                "play_sessions": len(sessions),
+                "play_csv": play_text,
+            }
+        return response
 
     async def import_history(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
@@ -547,6 +645,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         else:
             text = call.data["csv"]
         history = entry.runtime_data
+        if is_play_csv(text):
+            sessions, duplicates, other = parse_play_csv(
+                text, entry.title, history.sessions
+            )
+            return {
+                "racket": entry.title,
+                "contents": "play_sessions",
+                "imported": await history.async_add_sessions(sessions),
+                "skipped_duplicates": duplicates,
+                "skipped_other_rackets": other,
+            }
         records, duplicates, other = parse_csv(
             text,
             entry.title,
@@ -557,6 +666,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         imported = await history.async_add_many(records)
         return {
             "racket": entry.title,
+            "contents": "restrings",
             "imported": imported,
             "skipped_duplicates": duplicates,
             "skipped_other_rackets": other,
@@ -592,6 +702,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_DELETE_RESTRING, delete_restring, DELETE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_LOG_PLAY,
+        log_play,
+        LOG_PLAY_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DELETE_PLAY,
+        delete_play,
+        DELETE_PLAY_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(
         DOMAIN,

@@ -24,7 +24,6 @@ from .const import (
     CONF_TENSION_UNIT,
     TENSION_UNIT_LBS,
 )
-from .due import next_due
 from .entity import DailyRacketEntity
 
 DUE_SUMMARY = "Restring due"
@@ -93,7 +92,7 @@ class RestringCalendar(DailyRacketEntity, CalendarEntity):
                     record["id"],
                 )
             )
-        if (due := next_due(self._history.latest, self._entry.options)) is not None:
+        if (due := self._history.next_due(self._entry.options)) is not None:
             latest = self._history.latest or {}
             events.append(
                 _day(

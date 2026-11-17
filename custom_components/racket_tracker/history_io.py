@@ -5,6 +5,10 @@ also returned in the action's response. Imports read a file from the exports
 folder or an allowed one (allowlist_external_dirs), or CSV text, check every row first and add
 them in one go; rows already in the history are skipped, so importing the same
 file twice adds nothing. Photos aren't part of the CSV.
+
+Logged play sessions go to a CSV of their own (racket, id, date, hours, notes),
+written next to the restrings' when there are any. Import tells the two apart
+by their columns: an "hours" column and no main string means play sessions.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from .const import (
     ATTR_CROSS_STRING,
     ATTR_CROSS_TENSION,
     ATTR_DATE,
+    ATTR_HOURS,
     ATTR_MAIN_STRING,
     ATTR_MAIN_TENSION,
     ATTR_NOTES,
@@ -51,8 +56,12 @@ COLUMNS = (
     ATTR_BROKEN_DATE,
     ATTR_NOTES,
 )
+PLAY_COLUMNS = ("racket", "id", ATTR_DATE, ATTR_HOURS, ATTR_NOTES)
 # Spreadsheet headings we understand too
 ALIASES = {
+    "duration": ATTR_HOURS,
+    "hours_played": ATTR_HOURS,
+    "session_id": "id",
     "restring_date": ATTR_DATE,
     "strung": ATTR_DATE,
     "string": ATTR_MAIN_STRING,
@@ -80,24 +89,28 @@ def export_dir(hass: HomeAssistant) -> Path:
     return Path(hass.config.path(DOMAIN, "exports"))
 
 
-def to_csv(rows: list[tuple[str, dict[str, Any]]]) -> str:
-    """CSV text for (racket name, restring) pairs."""
+def to_csv(
+    rows: list[tuple[str, dict[str, Any]]], columns: tuple[str, ...] = COLUMNS
+) -> str:
+    """CSV text for (racket name, restring or play session) pairs."""
     out = io.StringIO()
-    writer = csv.DictWriter(out, fieldnames=COLUMNS, extrasaction="ignore")
+    writer = csv.DictWriter(out, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
     for racket, record in rows:
-        row = {k: record.get(k) for k in COLUMNS}
+        row = {k: record.get(k) for k in columns}
         row["racket"] = racket
         row["id"] = record.get("id")
         writer.writerow({k: "" if v is None else v for k, v in row.items()})
     return out.getvalue()
 
 
-async def async_write_export(hass: HomeAssistant, name: str, text: str) -> Path:
-    """Save an export; returns its path."""
+async def async_write_export(
+    hass: HomeAssistant, name: str, text: str, suffix: str = ""
+) -> Path:
+    """Save an export; returns its path. suffix: "-play" for play sessions."""
     stamp = dt_util.now().strftime("%Y%m%d-%H%M%S")
     slug = "-".join(re.findall(r"[a-z0-9]+", name.lower())) or "rackets"
-    path = export_dir(hass) / f"strung-{slug}-{stamp}.csv"
+    path = export_dir(hass) / f"strung-{slug}-{stamp}{suffix}.csv"
 
     def _write() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -223,14 +236,8 @@ def _row(row: dict[str, str], racket_unit: str) -> dict[str, Any]:
     return record
 
 
-def parse_csv(
-    text: str, racket: str, racket_unit: str, existing: list[dict[str, Any]]
-) -> tuple[list[dict[str, Any]], int, int]:
-    """Records to add, how many were already there, and rows for other rackets.
-
-    A "racket" column naming several rackets (an export of all of them) keeps
-    only this racket's rows; with one name, every row is taken.
-    """
+def _read_rows(text: str) -> tuple[list[str], list[tuple[int, dict[str, str]]]]:
+    """Headings and the non-empty rows (with their line numbers)."""
     try:
         dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t")
     except csv.Error:
@@ -240,25 +247,45 @@ def parse_csv(
         headings = [_column(h) for h in next(reader)]
     except StopIteration:
         raise _error("import_empty") from None
-    missing = {ATTR_DATE, ATTR_MAIN_STRING, ATTR_MAIN_TENSION} - set(headings)
-    if missing:
-        raise _error("import_columns", columns=", ".join(sorted(missing)))
-
     rows = [
         (number, dict(zip(headings, values, strict=False)))
         for number, values in enumerate(reader, start=2)
         if any(v.strip() for v in values)
     ]
+    return headings, rows
+
+
+def _this_racket(
+    rows: list[tuple[int, dict[str, str]]], racket: str
+) -> tuple[list[tuple[int, dict[str, str]]], int]:
+    """A "racket" column naming several rackets (an export of all of them)
+    keeps only this racket's rows; with one name, every row is taken."""
     names = {(r.get("racket") or "").strip().lower() for _, r in rows} - {""}
-    other = 0
-    if len(names) > 1:
-        before = len(rows)
-        rows = [
-            (n, r)
-            for n, r in rows
-            if (r.get("racket") or "").strip().lower() == racket.strip().lower()
-        ]
-        other = before - len(rows)
+    if len(names) <= 1:
+        return rows, 0
+    mine = [
+        (n, r)
+        for n, r in rows
+        if (r.get("racket") or "").strip().lower() == racket.strip().lower()
+    ]
+    return mine, len(rows) - len(mine)
+
+
+def is_play_csv(text: str) -> bool:
+    """Whether a CSV holds play sessions (an "hours" column, no main string)."""
+    headings, _ = _read_rows(text)
+    return ATTR_HOURS in headings and ATTR_MAIN_STRING not in headings
+
+
+def parse_csv(
+    text: str, racket: str, racket_unit: str, existing: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Records to add, how many were already there, and rows for other rackets."""
+    headings, rows = _read_rows(text)
+    missing = {ATTR_DATE, ATTR_MAIN_STRING, ATTR_MAIN_TENSION} - set(headings)
+    if missing:
+        raise _error("import_columns", columns=", ".join(sorted(missing)))
+    rows, other = _this_racket(rows, racket)
 
     ids = {r["id"] for r in existing}
     seen = {
@@ -289,3 +316,54 @@ def parse_csv(
         seen.add(key)
         records.append(record)
     return records, duplicates, other
+
+
+def _session_row(row: dict[str, str]) -> dict[str, Any]:
+    """One CSV row as a play session (raises ValueError if it's unusable)."""
+    if not (day := _date(row.get(ATTR_DATE) or "")):
+        raise ValueError("date is missing")
+    if (hours := _number(row.get(ATTR_HOURS) or "")) is None:
+        raise ValueError("hours is missing")
+    if not 0.1 <= hours <= 24:
+        raise ValueError(f"hours {hours:g} is not 0.1-24")
+    session: dict[str, Any] = {ATTR_DATE: day, ATTR_HOURS: _whole(round(hours, 2))}
+    if notes := (row.get(ATTR_NOTES) or "").strip():
+        session[ATTR_NOTES] = notes
+    if _ID.match(session_id := (row.get("id") or "").strip()):
+        session["id"] = session_id
+    return session
+
+
+def parse_play_csv(
+    text: str, racket: str, existing: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Play sessions to add, how many were already there, rows for other rackets.
+
+    A duplicate has the same id, or the same date, hours and notes.
+    """
+    headings, rows = _read_rows(text)
+    missing = {ATTR_DATE, ATTR_HOURS} - set(headings)
+    if missing:
+        raise _error("import_columns", columns=", ".join(sorted(missing)))
+    rows, other = _this_racket(rows, racket)
+
+    def key(s: dict[str, Any]) -> tuple[Any, ...]:
+        return (s[ATTR_DATE], float(s[ATTR_HOURS]), s.get(ATTR_NOTES) or "")
+
+    ids = {s["id"] for s in existing}
+    seen = {key(s) for s in existing}
+    sessions: list[dict[str, Any]] = []
+    duplicates = 0
+    for number, row in rows:
+        try:
+            session = _session_row(row)
+        except ValueError as err:
+            raise _error("import_row", row=str(number), reason=str(err)) from err
+        if session.get("id") in ids or key(session) in seen:
+            duplicates += 1
+            continue
+        if "id" in session:
+            ids.add(session["id"])
+        seen.add(key(session))
+        sessions.append(session)
+    return sessions, duplicates, other

@@ -1,0 +1,59 @@
+# A "Play" section for a racket that counts logged play sessions
+# (Configure → Play and tension loss → How to count hours played: Logged sessions).
+# Paste it under `sections:` of a sections view (e.g. the one in dashboard.yaml).
+# Replace `pure_aero` with your racket's entity ID prefix.
+# Needs the log_play script from examples/scripts.yaml.
+
+type: grid
+cards:
+  - type: heading
+    heading: Play
+    icon: mdi:tennis-ball
+  - type: tile
+    entity: sensor.pure_aero_hours_played
+    name: Played on these strings
+    grid_options: { columns: 6 }
+  - type: tile
+    entity: sensor.pure_aero_estimated_tension
+    name: Est. tension
+    grid_options: { columns: 6 }
+  # The usual session length (Configure → Play), for today, in one tap
+  - type: button
+    name: I played
+    icon: mdi:tennis-ball
+    entity: button.pure_aero_log_play_session
+    show_state: false
+    tap_action:
+      action: perform-action
+      perform_action: button.press
+      target:
+        entity_id: button.pure_aero_log_play_session
+    grid_options: { columns: 6, rows: 2 }
+  # Any length or day: opens the script's form
+  - type: button
+    name: Log play…
+    icon: mdi:timer-edit-outline
+    entity: script.log_play
+    tap_action:
+      action: more-info
+    grid_options: { columns: 6, rows: 2 }
+  # When the last session was, and how many on these strings
+  - type: entities
+    entities:
+      - type: attribute
+        entity: sensor.pure_aero_hours_played
+        attribute: last_session
+        name: Last session
+      - type: attribute
+        entity: sensor.pure_aero_hours_played
+        attribute: sessions
+        name: Sessions on these strings
+  # Hours played per day: rises with each session, drops to 0 on a restring
+  - type: statistics-graph
+    title: Hours played
+    entities:
+      - sensor.pure_aero_hours_played
+    chart_type: line
+    period: day
+    stat_types: [max]
+    days_to_show: 60

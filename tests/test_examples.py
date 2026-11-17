@@ -63,7 +63,12 @@ async def test_example_scripts(hass: HomeAssistant, tmp_path: Path) -> None:
 
 
 async def test_example_yaml_parses() -> None:
-    for name in ("dashboard.yaml", "dashboard_multi.yaml", "scripts.yaml"):
+    for name in (
+        "dashboard.yaml",
+        "dashboard_multi.yaml",
+        "dashboard_play.yaml",
+        "scripts.yaml",
+    ):
         assert load_yaml(str(EXAMPLES / name))
 
 
@@ -248,3 +253,43 @@ async def test_multi_racket_dashboard(hass: HomeAssistant) -> None:
     assert hass.states.get("sensor.blade_restrings").state == "2"
     assert hass.states.get("sensor.pure_aero_restrings").state == "1"
     assert hass.states.get("sensor.blade_strings").state == "ALU Power"
+
+
+async def test_play_dashboard_and_script(hass: HomeAssistant) -> None:
+    """dashboard_play.yaml's entities exist for a racket that logs play; the
+    log_play script logs a session."""
+    from custom_components.racket_tracker.const import DOMAIN
+
+    assert await async_setup_component(hass, "http", {})
+    entry_id = await _add_racket(hass)
+    result = await hass.config_entries.options.async_init(entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {"tension_unit": "lbs", "play": {"tracking": "logged"}}
+    )
+    scripts = load_yaml(str(EXAMPLES / "scripts.yaml"))
+    assert await async_setup_component(hass, "script", {"script": scripts})
+    await hass.async_block_till_done()
+    await hass.services.async_call(
+        DOMAIN,
+        "add_restring",
+        {"config_entry_id": entry_id, "main_string": "RPM Blast", "main_tension": 52},
+        blocking=True,
+    )
+
+    used = _entity_ids(load_yaml(str(EXAMPLES / "dashboard_play.yaml")))
+    missing = sorted(e for e in used if hass.states.get(e) is None)
+    assert used and not missing, missing
+
+    await hass.services.async_call(
+        "script", "log_play", {"racket": entry_id, "hours": 1.5}, blocking=True
+    )
+    await hass.services.async_call(
+        "script",
+        "log_play",
+        {"racket": entry_id, "hours": 2, "notes": "Match"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    state = hass.states.get("sensor.pure_aero_hours_played")
+    assert float(state.state) == 3.5
+    assert state.attributes["sessions"] == 2

@@ -9,13 +9,13 @@ One config entry = one racket = one device.
 custom_components/racket_tracker/
 ├── __init__.py        # Setup/unload, action registration (in async_setup), login-only photo view
 ├── const.py           # DOMAIN, option keys, restring field names, action/event names
-├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>), listeners
+├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>: restrings + play sessions), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: download ≤ once a day (after HA start / on search) → .storage/racket_tracker.dataset; fallback racqix_dataset.json (bundled, unmodified CC BY-NC-ND: never edit, only replace); search, label, apply()
 ├── repairs.py         # On entry setup: linked racket looked up in the list (async_get_dataset; not in it = removed) → issues (specs changed / missing: fix flows; unreachable = no copy as new as the link's version: warning)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
 ├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
-├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served) and import (parse_csv: validate all rows, skip duplicates)
+├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served; play sessions in a second *-play.csv) and import (parse_csv / parse_play_csv by columns: validate all rows, skip duplicates)
 ├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
 ├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()
@@ -25,18 +25,18 @@ custom_components/racket_tracker/
 ├── sensor.py          # History-derived sensors, PlaySensors (only with hours/week), StatsSensors (cost_per_hour only with hours/week), next_restring (only with due rules), one RacketSpecSensor per spec
 ├── binary_sensor.py   # restring_due (only with due rules)
 ├── calendar.py        # calendar.<racket>_restrings: all-day event per restring + next due
-├── button.py          # Restring with usual setup → usual_setup() + async_log_restring(); Strings broke → async_mark_broken()
+├── button.py          # Restring with usual setup → usual_setup() + async_log_restring(); Strings broke → async_mark_broken(); Log play session (logged tracking only) → async_log_play()
 ├── text.py / number.py # Usual setup fields in the device page's Controls (UsualSetupEntity in entity.py)
 ├── image.py           # image.<racket>_photo: most recent restring photo
 ├── diagnostics.py     # Options, effective specs, full history
-├── services.yaml      # add_restring, repeat_restring, calibrate_tension, update_restring, delete_restring, get_history, export_history, import_history
+├── services.yaml      # add_restring, repeat_restring, calibrate_tension, log_play, delete_play, update_restring, delete_restring, get_history, export_history, import_history
 ├── icons.json         # Entity + action icons (no _attr_icon in code)
 ├── strings.json       # Source strings; translations/en.json must be identical
 ├── quality_scale.yaml # Self-assessment; keep it honest
 └── brand/             # icon/logo PNGs loaded by HA 2026.3+ and checked by hacs/action. Do not delete.
 
-blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings, racket_picker
-examples/              # scripts.yaml (form UI), dashboard.yaml (one racket), dashboard_multi.yaml (dropdown: input_select.racket + racket_picker blueprint; cards find the racket by sensor.<racket>_strings). Built-in cards only
+blueprints/automation/racket_tracker/  # restring_due, restring_reminder, restring_logged, rate_strings, racket_picker, play_prompt (notification buttons → log_play), play_from_calendar (calendar event end → log_play)
+examples/              # scripts.yaml (form UI, incl. log_play), dashboard.yaml (one racket), dashboard_play.yaml (Play section, logged sessions), dashboard_multi.yaml (dropdown: input_select.racket + racket_picker blueprint; cards find the racket by sensor.<racket>_strings). Built-in cards only
 images/brand/          # strung-logo.jpg (the logo) → make_brand.py → brand/*.png (no tagline; light logo recolours white to navy)
 images/screenshots/    # README screenshots: real HA 2026.9 rendering examples/dashboard.yaml and dashboard_multi.yaml (light + dark)
 tests/                 # All tests run against a real HA via pytest-homeassistant-custom-component
@@ -81,10 +81,18 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
   rate, or a calibrated one, stays. Without a string type only polyester's old preset is compared.
   Migration steps run only below their minor version (HA may call it more than once per setup),
   and the flow's `MINOR_VERSION` is `PRESET_MINOR_VERSION` so new entries are never migrated.
-  Without hours/week the estimate sensors are removed; tests in `tests/test_tension.py` cover
+  `tracking` ("weekly" default / "logged"): logged counts the play sessions in
+  `RacketHistory.sessions` (`log_play`, `delete_play`, `button.<racket>_log_play_session` with
+  `session_hours`, default 1.5) instead of hours/week; `log_play` is refused in weekly mode.
+  `play_settings(options, record, sessions, today)` carries them; `hours_played(settings, start,
+  end)` counts sessions up to `logged_until` (today) and forecasts the days after it at
+  hours/week, else the last 28 days' pace (`logged_pace`). Use `history.play_settings()` /
+  `history.next_due()` in entities so sessions and today are passed; backfill passes no today
+  (no forecast). `tracks_play(options)` decides whether the play entities exist.
+  Without hours/week (and not logged) the estimate sensors are removed; tests in `tests/test_tension.py` cover
   every step, custom rates, a restart and a downgraded entry.
 - `due` (optional section): `days`, `hours_played`, `min_tension` (racket unit); earliest wins.
-  `hours_played`/`min_tension` need hours/week (flow error `due_needs_play`). Without rules the
+  `hours_played`/`min_tension` need hours/week or logged tracking (flow error `due_needs_play`). Without rules the
   due binary sensor and next_restring sensor are removed.
 - `current` (form section, never stored as an option): main/cross string + tension and `date`
   → `async_set_current_strings()` (`current_strings_change()`): only the date or only the
@@ -114,6 +122,7 @@ scripts/update_dataset.py  # Refresh the bundled Racqix copy (see Releases); --c
   descriptions (services.yaml, loaded once) with a `select` + `custom_value` selector for
   main/cross string: used strings first, then the catalog. Runs on setup and history changes.
   Stats sensor names must not end in "strings": dashboards find rackets by `sensor.*_strings`.
+- Blueprint tests: don't `async_block_till_done` while a run sits in `wait_for_trigger` (it never returns); calendar-trigger test events must not end on its 15-minute refresh times.
 - Import fires no `restrung` events. Duplicates: same `id`, or same date + main string + tension.
 
 ## Photos

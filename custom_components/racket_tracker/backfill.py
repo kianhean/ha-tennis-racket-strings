@@ -43,6 +43,7 @@ MAX_DAYS = 3 * 365
 def _hourly(
     records: list[dict[str, Any]],
     options: Mapping[str, Any],
+    sessions: tuple[tuple[date, float], ...],
     start: datetime,
     end: datetime,
 ) -> tuple[list[tuple[datetime, float]], list[tuple[datetime, float]]]:
@@ -59,8 +60,9 @@ def _hourly(
             index = bisect.bisect_right(dates, day.isoformat()) - 1
             record = records[index] if index >= 0 else None
             value = record.get(ATTR_MAIN_TENSION) if record else None
-            # Each restring with its own string's material
-            settings = play_settings(options, record) if record else None
+            # Each restring with its own string's material; logged sessions
+            # count up to that day (no forecast)
+            settings = play_settings(options, record, sessions) if record else None
             est = estimate(record, settings, day) if record and settings else None
             per_day[day] = (
                 value if isinstance(value, (int, float)) else None,
@@ -94,7 +96,12 @@ async def async_backfill(hass: HomeAssistant, entry: RacketConfigEntry) -> None:
     first = dt_util.start_of_local_day(date.fromisoformat(records[0][ATTR_DATE]))
     start = max(dt_util.as_utc(first), end - timedelta(days=MAX_DAYS))
     strung, estimated = await hass.async_add_executor_job(
-        _hourly, records, dict(entry.options), start, end
+        _hourly,
+        records,
+        dict(entry.options),
+        entry.runtime_data.play_log,
+        start,
+        end,
     )
 
     registry = er.async_get(hass)

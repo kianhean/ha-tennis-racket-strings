@@ -37,10 +37,10 @@
 | | | |
 |---|---|---|
 | 🔔 **Restring due**<br>Restring after N days, N hours of play, or when the estimated tension drops to a set value: a [due sensor and a calendar](#restring-due) | 🔁 **Usual setup**<br>Save your usual string job and [log it in one tap](#usual-setup) | 📅 **Calendar**<br>Every restring, and the next one due, in HA's calendar |
-| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, that you can calibrate with a measurement |
+| 🎾 **One device per racket**<br>Brand, model, head size and string pattern, with lbs or kg per racket; add as many rackets as you own | 🧵 **Restring history**<br>Date, mains and crosses (hybrids too), tensions, cost and stringer, plus a 1–5 rating and notes for every job | ⏱️ **Tension estimate**<br>A [research-based](#where-the-numbers-come-from) estimate of the current tension, by string type, from your hours per week or the [play sessions you log](#logging-play-sessions-instead), that you can calibrate with a measurement |
 | 📸 **A photo per restring**<br>Upload from your phone through HA's media browser | 📏 **Racket specs**<br>Weight, balance, swingweight, stiffness, length and recommended tension range: looked up from a 1,250-racket dataset, or your own measurements | 📊 **Sensors**<br>Current strings, tension (graphed over time), last restrung, string age, number of restrings and total spent |
 | 🧶 **String suggestions**<br>Pick from [~810 strings](#string-suggestions) or type your own; the string's material sets the tension estimate | 💥 **Breakages and string life**<br>[One tap when strings break](#when-strings-break); average string life, breakage rate, spend this year, cost per hour and your favourite setup | 💾 **Import and export**<br>[CSV in and out](#import-and-export): back up, or bring your restring spreadsheet |
-| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, and a nudge to rate your strings | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
+| 🛠️ **Actions**<br>Add, edit and delete restrings or fetch the whole history, from scripts, automations and dashboards | 🧩 **Blueprints**<br>[One-click automations](#one-click-blueprints): restring due, a notification with the photo, a nudge to rate your strings, and logging play from a notification or your calendar | 🏠 **Local first**<br>No account. History lives in `.storage`, photos in your config folder. The string list is built in; the only network request is the optional racket lookup |
 
 ## Installation
 
@@ -248,7 +248,8 @@ ways, and the estimate adds them up:
 loss = initial loss                                  first day after stringing
      + relaxation loss × log10(days since stringing)  played or not
      + first-hour loss × log2(1 + hours played)       from play
-hours played = hours per week × days ÷ 7              (loss is capped at 50 %)
+hours played = hours per week × days ÷ 7              (loss is capped at 50 %),
+               or the play sessions you logged         (see below)
 tension now  = strung tension × (1 − loss)
 ```
 
@@ -257,7 +258,8 @@ play costs most in the first hours: each doubling of the hours played costs as m
 
 | Field | Polyester | Nylon / multi | Natural gut |
 |---|---|---|---|
-| Hours of play per week | required (0 for a spare racket) | | |
+| How to count hours played | Hours per week (default) or Logged sessions | | |
+| Hours of play per week | required for hours per week (0 for a spare racket) | | |
 | String type | default | | |
 | Initial tension loss | 10 % | 6 % | 6 % |
 | Loss in the first hour of play | 3 % | 1.5 % | 1.5 % |
@@ -285,6 +287,24 @@ Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours pl
 **Calibrate it to your strings.** Measure the mains with a stringbed tension meter or app and run
 `racket_tracker.calibrate_tension` (racket, measured tension, optional date). All three rates are
 scaled by the same factor so the estimate matches your measurement, and saved on the racket.
+
+### Logging play sessions instead
+
+If you play irregularly, set **How to count hours played** to **Logged sessions**. Then only the
+play you log counts:
+
+- press `button.<racket>_log_play_session` after you play: it logs **Usual session length**
+  (default 1.5 h) for today, or
+- run `racket_tracker.log_play` (racket, hours, optional date and notes), e.g. from a script, an
+  NFC tag or a voice assistant. `racket_tracker.delete_play` removes a session (by default the
+  one logged last).
+
+A session counts for the strings on the racket that day (a session on a restring day counts for
+the new strings). Hours played, the estimated tension, string life hours and cost per hour then
+use your sessions. For the [restring due](#restring-due) date, the hours after today are a
+forecast: **Hours of play per week** if you set it, else the pace of the sessions you logged in
+the last four weeks. Sessions are listed by `get_history` (`play_sessions`) and in diagnostics,
+and are deleted with the racket.
 
 ### History, including backdated restrings
 
@@ -346,10 +366,10 @@ Updated after every restring and at midnight:
 
 | Sensor | State | Attributes |
 |---|---|---|
-| `sensor.<racket>_average_string_life` | `28` d: how long a string bed lasted, until it broke or the next restring | `average_hours_played` (with hours per week), `average_days_to_break` |
+| `sensor.<racket>_average_string_life` | `28` d: how long a string bed lasted, until it broke or the next restring | `average_hours_played` (with hours per week or logged sessions), `average_days_to_break` |
 | `sensor.<racket>_string_breakages` | `2` | `breakage_rate` (% of finished string beds), `last_broken` |
 | `sensor.<racket>_string_cost_this_year` | `135` (your currency) | `restrings_this_year` |
-| `sensor.<racket>_string_cost_per_hour` | `1.20` (currency/h): spend since the first restring per estimated hour played | Only with hours per week |
+| `sensor.<racket>_string_cost_per_hour` | `1.20` (currency/h): spend since the first restring per hour played (estimated or logged) | Only with hours per week or logged sessions |
 | `sensor.<racket>_most_used_setup` | `Hyper-G 1.25 / VS Touch 1.30` | `string_counts` |
 | `sensor.<racket>_best_rated_setup` | `RPM Blast 1.25` (best average rating) | `average_rating`, `ratings` |
 
@@ -381,6 +401,13 @@ data:
 - Every row is checked first: one bad row stops the import with its row number, and nothing is added.
 - No `racket_tracker_restrung` events fire, so blueprints don't announce old restrings.
 
+**Play sessions.** If a racket has [logged sessions](#logging-play-sessions-instead), the export
+also writes `strung-<racket>-<time>-play.csv` (columns `racket`, `id`, `date`, `hours`, `notes`)
+and returns `play_file`, `play_sessions` and `play_csv`. Importing that file (or any CSV with
+`date` and `hours` columns and no `main_string`) adds play sessions instead of restrings; the
+response says which (`contents`). A session with the same ID, or the same date, hours and notes,
+is skipped.
+
 ## Restring due
 
 Under **Restring reminder** (when adding the racket or under **Configure**), set one or more rules.
@@ -389,8 +416,8 @@ The earliest one wins:
 | Rule | Example | Needs |
 |---|---|---|
 | Restring after (days) | `60` | — |
-| Restring after (hours of play) | `40` | Hours of play per week |
-| Restring when estimated tension drops to | `44` (the racket's unit) | Hours of play per week |
+| Restring after (hours of play) | `40` | Hours of play per week, or [logged sessions](#logging-play-sessions-instead) |
+| Restring when estimated tension drops to | `44` (the racket's unit) | Hours of play per week, or logged sessions |
 
 Then you get:
 
@@ -413,8 +440,8 @@ it to a **Calendar** card, or use it in calendar triggers. Event text is in Engl
 
 ### One-click blueprints
 
-Import a blueprint, then create an automation from it and pick your racket's sensor from the
-drop-down. For the notify action, enter your phone's, for example `notify.mobile_app_your_phone`.
+Import a blueprint, then create an automation from it and pick your racket (or its sensor) from
+the drop-down. For the notify action, enter your phone's, for example `notify.mobile_app_your_phone`.
 
 | Blueprint | What it does | |
 |---|---|---|
@@ -423,6 +450,8 @@ drop-down. For the notify action, enter your phone's, for example `notify.mobile
 | 📸 **Restring logged** | A notification, with the photo, every time a restring is logged (one racket or all) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frestring_logged.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the restring_logged.yaml blueprint"></a> |
 | 🎾 **Racket picker** | Keep a dropdown helper filled with your rackets, for the [multi-racket dashboard](#several-rackets-pick-one-from-a-dropdown) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fracket_picker.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the racket_picker.yaml blueprint"></a> |
 | ⭐ **Rate your strings** | A few days after a restring, remind you to rate it if you haven't | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Frate_strings.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the rate_strings.yaml blueprint"></a> |
+| ⏱️ **Ask how long you played** | On the days and time you pick, a phone notification with 1 h / 1.5 h / 2 h / Didn't play buttons; a tap [logs the session](#logging-play-sessions-instead). Needs the Companion app | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fplay_prompt.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the play_prompt.yaml blueprint"></a> |
+| 📅 **Log play from your calendar** | When a calendar event with "tennis" (or your keyword) in its title ends, log a session as long as the event (capped, all-day events skipped) | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fkianhean%2Fha-tennis-racket-strings%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fracket_tracker%2Fplay_from_calendar.yaml"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Import the play_from_calendar.yaml blueprint"></a> |
 
 The blueprints live in [`blueprints/automation/racket_tracker/`](blueprints/automation/racket_tracker)
 and need Home Assistant 2025.7 or newer.
@@ -462,7 +491,7 @@ actions:
 
 There's no automatic dashboard: you add the example view yourself. It takes a minute:
 
-1. Add the two scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
+1. Add the scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
    then reload them (**Developer tools → YAML → Scripts**).
 2. **Settings → Dashboards → Add dashboard → New dashboard from scratch**, name it *Rackets*, and open it.
 3. **✏️ → ⋮ → Raw configuration editor**, replace everything with `views:` and paste the contents of
@@ -474,7 +503,7 @@ There's no automatic dashboard: you add the example view yourself. It takes a mi
 Home Assistant's built-in cards:
 
 - the racket photo, current strings, tension, string age, last restrung and total spent
-- the estimated tension now and how much has been lost (remove those two tiles if you don't set hours per week)
+- the estimated tension now and how much has been lost (remove those two tiles if you set neither hours per week nor [logged sessions](#logging-play-sessions-instead))
 - **Log restring** and **Rate strings** buttons (they open the script forms), and **Usual setup**,
   which logs your [usual setup](#usual-setup) for today after a confirmation
 - a **Schedule** column: Restring due, Next restring and a month calendar of restrings and the next
@@ -485,6 +514,12 @@ Home Assistant's built-in cards:
 
 A test checks that every entity it uses exists. The screenshot at the top is this view in Home
 Assistant 2026.9 with example data (the photos are placeholders).
+
+**Logged play.** For a racket that counts [logged sessions](#logging-play-sessions-instead), add
+the **Play** section from [`examples/dashboard_play.yaml`](examples/dashboard_play.yaml) (paste it
+under `sections:`): hours played on these strings, the estimated tension, an **I played** button
+(the usual session length, today), **Log play…** (the `log_play` script's form, for any length or
+day), the last session and a daily graph of hours played.
 
 ### Several rackets: pick one from a dropdown
 
@@ -537,9 +572,9 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `sensor.<racket>_days_since_restring` | `12` d | Updated at midnight |
 | `sensor.<racket>_restrings` | `7` | `history`: every restring, newest first (not stored in the recorder) |
 | `sensor.<racket>_total_string_cost` | `6650` (your currency) | `average_cost` |
-| `sensor.<racket>_estimated_tension` | `39.5` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, `string_type`, `string_type_source`, `twu_tension_loss` and rates. Only with [hours per week](#estimated-tension) |
+| `sensor.<racket>_estimated_tension` | `39.5` lbs | `strung_tension`, `strung_cross_tension`, `estimated_cross_tension`, `date`, `string_type`, `string_type_source`, `twu_tension_loss` and rates. Only with [hours per week](#estimated-tension) or [logged sessions](#logging-play-sessions-instead) |
 | `sensor.<racket>_estimated_tension_loss` | `24` % | play settings |
-| `sensor.<racket>_hours_played` | `8` h | Since the latest restring |
+| `sensor.<racket>_hours_played` | `8` h | Since the latest restring. With logged sessions: `sessions`, `last_session` |
 | `sensor.<racket>_next_restring` | `2027-01-14` | Only with a [restring rule](#restring-due) |
 | `binary_sensor.<racket>_restring_due` | on (Due) / off | `due_date`, `days_until_due`, `reason`. Only with a restring rule |
 | `calendar.<racket>_restrings` | on during a restring / due day | Events: every restring and the next one due |
@@ -547,6 +582,7 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `text.<racket>_usual_main_string`, `_usual_cross_string`, `_usual_stringer` | the [usual setup](#usual-setup) value, empty if unset | Editable; empty clears it |
 | `number.<racket>_usual_main_tension`, `_usual_cross_tension`, `_usual_cost` | the [usual setup](#usual-setup) value | Editable, in the racket's tension unit / your currency |
 | `button.<racket>_strings_broke` | time last pressed | Marks the current strings [broken](#when-strings-break) today |
+| `button.<racket>_log_play_session` | time last pressed | Logs a session of the usual length for today. Only with [logged sessions](#logging-play-sessions-instead) |
 | `sensor.<racket>_average_string_life`, `_string_breakages`, `_string_cost_this_year`, `_string_cost_per_hour`, `_most_used_setup`, `_best_rated_setup` | see [String life and costs](#string-life-and-costs) | |
 | `image.<racket>_photo` | time of the latest photo | `restring_id`, `date` |
 | `sensor.<racket>_<spec>` | see [Racket specs](#racket-specs) | `source`: `measured` / `dataset` |
@@ -560,9 +596,11 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | `racket_tracker.repeat_restring` | Log a restring with the usual setup, or copy a past one (`restring_id`) | Optional: the new restring |
 | `racket_tracker.update_restring` | Change any field; add, replace or remove the photo; mark the strings broken (`broken`, `broken_date`). **Leave `restring_id` empty to edit the latest restring.** | Optional: the updated restring |
 | `racket_tracker.delete_restring` | Delete a restring and its photo | — |
-| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]` |
-| `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv` |
-| `racket_tracker.import_history` | Add restrings from a CSV file or text ([details](#import-and-export)) | Optional: `imported`, `skipped_duplicates`, `skipped_other_rackets` |
+| `racket_tracker.log_play` | Log a play session (racket, hours, optional date, notes); needs [logged sessions](#logging-play-sessions-instead) | Optional: the session, including its `id` |
+| `racket_tracker.delete_play` | Delete a play session (`session_id`, else the one logged last) | Optional: the deleted session |
+| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]`, `play_sessions[]` (if any) |
+| `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv`; with play sessions also `play_file`, `play_sessions`, `play_csv` |
+| `racket_tracker.import_history` | Add restrings, or play sessions, from a CSV file or text ([details](#import-and-export)) | Optional: `contents`, `imported`, `skipped_duplicates`, `skipped_other_rackets` |
 
 Restring IDs are in the `history` attribute and in the action responses.
 

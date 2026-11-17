@@ -1,0 +1,73 @@
+blueprint:
+  name: Racket – log play from your calendar
+  description: >-
+    When a calendar event ends (a court booking, a lesson, a league match),
+    log a play session as long as the event with the **Log play** action of
+    the Strung integration. Only events whose title contains the keyword
+    count; all-day events never do. The racket must count **Logged sessions**
+    (Configure → Play and tension loss).
+  domain: automation
+  author: Strung
+  source_url: https://github.com/kianhean/ha-tennis-racket-strings/blob/main/blueprints/automation/racket_tracker/play_from_calendar.yaml
+  homeassistant:
+    min_version: 2025.7.0
+  input:
+    calendar:
+      name: Calendar
+      selector:
+        entity:
+          filter:
+            - domain: calendar
+    keyword:
+      name: Title contains
+      description: Not case-sensitive. Leave empty to log every timed event.
+      default: tennis
+      selector:
+        text: {}
+    racket:
+      name: Racket
+      selector:
+        config_entry:
+          integration: racket_tracker
+    max_hours:
+      name: Longest session
+      description: Longer events are logged as this many hours.
+      default: 4
+      selector:
+        number: { min: 0.5, max: 24, step: 0.5, unit_of_measurement: h }
+
+mode: queued
+max_exceeded: silent
+
+triggers:
+  - trigger: calendar
+    event: end
+    entity_id: !input calendar
+
+variables:
+  racket: !input racket
+  keyword: !input keyword
+  max_hours: !input max_hours
+  event: "{{ trigger.calendar_event }}"
+  # Hours from start to end, to the nearest quarter hour
+  hours: >-
+    {% set length = as_datetime(event.end) - as_datetime(event.start) %}
+    {{ [[(length.total_seconds() / 900) | round(0) / 4, max_hours] | min, 0] | max }}
+
+conditions:
+  # All-day events have a date without a time
+  - condition: template
+    value_template: "{{ 'T' in event.start | string }}"
+  - condition: template
+    value_template: >-
+      {{ keyword | trim == '' or (keyword | trim | lower) in (event.summary or '') | lower }}
+  - condition: template
+    value_template: "{{ hours | float(0) >= 0.25 }}"
+
+actions:
+  - action: racket_tracker.log_play
+    data:
+      config_entry_id: "{{ racket }}"
+      hours: "{{ hours }}"
+      date: "{{ (as_datetime(event.start) | as_local).date() | string }}"
+      notes: "{{ event.summary }}"

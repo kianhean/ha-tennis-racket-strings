@@ -50,8 +50,10 @@ class RacketHistory:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}"
         )
         self.restrings: list[dict[str, Any]] = []
-        # Logged play sessions: {id, created, date, hours, notes?}, by date
+        # Logged play sessions: {id, created, date, hours, notes?, session_type?, surface?}, by date
         self.sessions: list[dict[str, Any]] = []
+        # Stored tension measurements: {id, created, date, tension, restring_id, tool?}, by date
+        self.calibrations: list[dict[str, Any]] = []
         self._listeners: list[Callable[[], None]] = []
 
     async def async_load(self) -> None:
@@ -59,6 +61,7 @@ class RacketHistory:
         data = await self._store.async_load()
         self.restrings = list((data or {}).get("restrings", []))
         self.sessions = list((data or {}).get("sessions", []))
+        self.calibrations = list((data or {}).get("calibrations", []))
         self._sort()
 
     async def async_remove(self) -> None:
@@ -91,6 +94,10 @@ class RacketHistory:
     def get(self, restring_id: str) -> dict[str, Any] | None:
         """Return a restring by id."""
         return next((r for r in self.restrings if r["id"] == restring_id), None)
+
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
+        """Return a play session by id."""
+        return next((s for s in self.sessions if s["id"] == session_id), None)
 
     @property
     def play_log(self) -> tuple[tuple[date, float], ...]:
@@ -182,6 +189,17 @@ class RacketHistory:
             await self._async_commit()
         return len(sessions)
 
+    async def async_update_session(
+        self, session_id: str, changes: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Update fields of an existing play session and persist."""
+        if (session := self.get_session(session_id)) is None:
+            return None
+        session.update(changes)
+        session["updated"] = dt_util.utcnow().isoformat()
+        await self._async_commit()
+        return session
+
     async def async_delete_session(self, session_id: str) -> dict[str, Any] | None:
         """Delete a play session and persist; returns it, or None if not found."""
         if (
@@ -192,11 +210,37 @@ class RacketHistory:
         await self._async_commit()
         return session
 
+    async def async_add_calibration(
+        self, calibration: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Store a measured tension calibration point and persist."""
+        new = {
+            "id": calibration.pop("id", None) or new_restring_id(),
+            "created": dt_util.utcnow().isoformat(),
+            **calibration,
+        }
+        self.calibrations.append(new)
+        await self._async_commit()
+        return new
+
+    async def async_add_calibrations(self, calibrations: list[dict[str, Any]]) -> int:
+        """Add several calibration measurements (backup import) with one save."""
+        now = dt_util.utcnow().isoformat()
+        for cal in calibrations:
+            self.calibrations.append(
+                {"id": cal.pop("id", None) or new_restring_id(), "created": now} | cal
+            )
+        if calibrations:
+            await self._async_commit()
+        return len(calibrations)
+
     async def _async_commit(self) -> None:
         self._sort()
         data: dict[str, Any] = {"restrings": self.restrings}
         if self.sessions:
             data["sessions"] = self.sessions
+        if self.calibrations:
+            data["calibrations"] = self.calibrations
         await self._store.async_save(data)
         for listener in list(self._listeners):
             listener()
@@ -204,6 +248,7 @@ class RacketHistory:
     def _sort(self) -> None:
         self.restrings.sort(key=lambda r: (r.get(ATTR_DATE, ""), r.get("created", "")))
         self.sessions.sort(key=lambda s: (s[ATTR_DATE], s.get("created", "")))
+        self.calibrations.sort(key=lambda c: (c[ATTR_DATE], c.get("created", "")))
 
     # ---------------------------------------------------------------- listeners
 

@@ -43,6 +43,13 @@ ATTR_BROKEN = "broken"
 # Play session fields (log_play)
 ATTR_SESSION_ID = "session_id"
 ATTR_HOURS = "hours"
+ATTR_SESSION_TYPE = "session_type"
+ATTR_SURFACE = "surface"
+# Calibration fields
+ATTR_TOOL = "tool"
+
+SESSION_TYPES = ["singles_match", "doubles_match", "practice", "ball_machine"]
+SURFACES = ["hard", "clay", "grass", "indoor"]
 
 EDITABLE_FIELDS = (
     ATTR_DATE,
@@ -77,7 +84,11 @@ SERVICE_CALIBRATE_TENSION = "calibrate_tension"
 SERVICE_EXPORT_HISTORY = "export_history"
 SERVICE_IMPORT_HISTORY = "import_history"
 SERVICE_LOG_PLAY = "log_play"
+SERVICE_UPDATE_PLAY = "update_play"
 SERVICE_DELETE_PLAY = "delete_play"
+SERVICE_GET_BAG_SUMMARY = "get_bag_summary"
+SERVICE_EXPORT_BACKUP = "export_backup"
+SERVICE_IMPORT_BACKUP = "import_backup"
 
 # Events
 EVENT_RESTRUNG = f"{DOMAIN}_restrung"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -84,6 +85,7 @@ from .tension import (
 )
 
 CONF_LOOKUP = "lookup"
+CONF_COPY_FROM = "copy_from"
 CONF_RACQUET = "racquet"
 CONF_USE_DATASET = "use_dataset"
 
@@ -273,6 +275,33 @@ def _clean(user_input: dict[str, Any], errors: dict[str, str]) -> dict[str, Any]
     return data
 
 
+def _merge_copied_options(
+    source: Mapping[str, Any],
+    data: dict[str, Any],
+    raw_input: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Copy a racket's options as defaults and layer any user-entered fields on top."""
+    merged: dict[str, Any] = {
+        k: dict(v) if isinstance(v, dict) else v
+        for k, v in source.items()
+        if k != CONF_CURRENT
+    }
+    for key, value in data.items():
+        if (
+            key == CONF_TENSION_UNIT
+            and raw_input.get(CONF_TENSION_UNIT) == TENSION_UNIT_LBS
+            and source.get(CONF_TENSION_UNIT)
+        ):
+            # Keep the source racket's unit unless the user explicitly picked a different one
+            continue
+        if isinstance(value, dict):
+            if value:
+                merged[key] = {**(merged.get(key) or {}), **value}
+        elif value not in (None, ""):
+            merged[key] = value
+    return merged
+
+
 class _LookupMixin:
     """Search the racket dataset and let the user pick a match."""
 
@@ -355,13 +384,19 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle adding a racket."""
         errors: dict[str, str] = {}
+        existing = self._async_current_entries()
         if user_input is not None:
             data = _clean(user_input, errors)
             name = data.pop(CONF_NAME).strip()
+            copy_from = data.pop(CONF_COPY_FROM, None)
             query = (data.pop(CONF_LOOKUP, None) or "").strip()
             if not name:
                 errors[CONF_NAME] = "name_required"
             if not errors:
+                if copy_from and (
+                    source := self.hass.config_entries.async_get_entry(copy_from)
+                ):
+                    data = _merge_copied_options(source.options, data, user_input)
                 self._current = data.pop(CONF_CURRENT, None)
                 self._name, self._options = name, data
                 if not query:
@@ -369,9 +404,31 @@ class RacketTrackerConfigFlow(_LookupMixin, ConfigFlow, domain=DOMAIN):
                 if await self._async_lookup(query, errors):
                     return await self.async_step_pick()
 
+        schema = USER_SCHEMA
+        if existing:
+            copy_options = [
+                SelectOptionDict(value=entry.entry_id, label=entry.title)
+                for entry in sorted(existing, key=lambda e: e.title.lower())
+            ]
+            schema = (
+                vol.Schema(
+                    {
+                        vol.Required(CONF_NAME): TextSelector(),
+                        vol.Optional(CONF_COPY_FROM): SelectSelector(
+                            SelectSelectorConfig(
+                                options=copy_options,
+                                mode=SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                    }
+                )
+                .extend(LOOKUP_SCHEMA.schema)
+                .extend(RACKET_DETAILS_SCHEMA.schema)
+            )
+
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input),
+            data_schema=self.add_suggested_values_to_schema(schema, user_input),
             errors=errors,
         )
 

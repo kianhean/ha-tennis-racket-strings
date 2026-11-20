@@ -31,4 +31,5 @@ async def async_get_config_entry_diagnostics(
         # Stored records: no signed photo URLs in a file users share
         "restrings": list(reversed(history.restrings)),
         "play_sessions": list(reversed(history.sessions)),
+        "calibrations": list(reversed(history.calibrations)),
     }

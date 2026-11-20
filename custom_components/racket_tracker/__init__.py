@@ -8,6 +8,10 @@ from datetime import date
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, add_extra_js_url
+from homeassistant.components.http import (  # type: ignore[attr-defined]
+    StaticPathConfig,
+)
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -26,6 +30,7 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.yaml import load_yaml_dict
 
 from .backfill import async_backfill
+from .backup import async_export_backup, async_import_backup
 from .const import (
     ATTR_BROKEN,
     ATTR_BROKEN_DATE,
@@ -43,7 +48,10 @@ from .const import (
     ATTR_REMOVE_IMAGE,
     ATTR_RESTRING_ID,
     ATTR_SESSION_ID,
+    ATTR_SESSION_TYPE,
     ATTR_STRINGER,
+    ATTR_SURFACE,
+    ATTR_TOOL,
     CONF_CURRENT,
     CONF_SETUP,
     CONF_TENSION_UNIT,
@@ -54,13 +62,19 @@ from .const import (
     SERVICE_CALIBRATE_TENSION,
     SERVICE_DELETE_PLAY,
     SERVICE_DELETE_RESTRING,
+    SERVICE_EXPORT_BACKUP,
     SERVICE_EXPORT_HISTORY,
+    SERVICE_GET_BAG_SUMMARY,
     SERVICE_GET_HISTORY,
+    SERVICE_IMPORT_BACKUP,
     SERVICE_IMPORT_HISTORY,
     SERVICE_LOG_PLAY,
     SERVICE_REPEAT_RESTRING,
+    SERVICE_UPDATE_PLAY,
     SERVICE_UPDATE_RESTRING,
+    SESSION_TYPES,
     SETUP_FIELDS,
+    SURFACES,
     TENSION_UNIT_LBS,
 )
 from .dataset import async_schedule_refresh
@@ -97,6 +111,9 @@ from .tension import (
     tracks_play,
     uses_old_presets,
 )
+from .websocket_api import async_register_websocket_commands, build_bag_summary
+
+FRONTEND_URL = f"/{DOMAIN}/strung-cards.js"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -179,6 +196,7 @@ CALIBRATE_SCHEMA = vol.Schema(
         vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
         vol.Required("tension"): _TENSION,
         vol.Optional(ATTR_DATE): cv.date,
+        vol.Optional(ATTR_TOOL): cv.string,
     }
 )
 
@@ -189,6 +207,8 @@ LOG_PLAY_SCHEMA = vol.Schema(
             vol.Coerce(float), vol.Range(min=0.1, max=24), _whole
         ),
         vol.Optional(ATTR_DATE): cv.date,
+        vol.Optional(ATTR_SESSION_TYPE): vol.In(SESSION_TYPES),
+        vol.Optional(ATTR_SURFACE): vol.In(SURFACES),
         vol.Optional(ATTR_NOTES): cv.string,
     }
 )
@@ -200,9 +220,32 @@ DELETE_PLAY_SCHEMA = vol.Schema(
     }
 )
 
+UPDATE_PLAY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string,
+        vol.Optional(ATTR_SESSION_ID): cv.string,
+        vol.Optional(ATTR_HOURS): vol.All(
+            vol.Coerce(float), vol.Range(min=0.1, max=24), _whole
+        ),
+        vol.Optional(ATTR_DATE): cv.date,
+        vol.Optional(ATTR_SESSION_TYPE): vol.In(SESSION_TYPES),
+        vol.Optional(ATTR_SURFACE): vol.In(SURFACES),
+        vol.Optional(ATTR_NOTES): cv.string,
+    }
+)
+
 HISTORY_SCHEMA = vol.Schema({vol.Required(ATTR_CONFIG_ENTRY_ID): cv.string})
 
+BAG_SUMMARY_SCHEMA = vol.Schema({})
+
 EXPORT_SCHEMA = vol.Schema({vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string})
+
+IMPORT_BACKUP_SCHEMA = vol.Schema(
+    {
+        vol.Required("file"): cv.string,
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
 
 IMPORT_SCHEMA = vol.All(
     vol.Schema(
@@ -421,6 +464,8 @@ async def async_log_play(
     hours: float,
     on: date | None = None,
     notes: str | None = None,
+    session_type: str | None = None,
+    surface: str | None = None,
 ) -> dict[str, Any]:
     """Log a play session (log_play action, Log play session button)."""
     if not logs_play(entry.options):
@@ -433,6 +478,10 @@ async def async_log_play(
         ATTR_DATE: (on or dt_util.now().date()).isoformat(),
         ATTR_HOURS: _whole(float(hours)),
     }
+    if session_type:
+        session[ATTR_SESSION_TYPE] = session_type
+    if surface:
+        session[ATTR_SURFACE] = surface
     if notes:
         session[ATTR_NOTES] = notes
     return await entry.runtime_data.async_add_session(session)
@@ -489,6 +538,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     "strung": str(latest.get(ATTR_MAIN_TENSION)),
                 },
             ) from err
+        cal_record: dict[str, Any] = {
+            ATTR_DATE: on.isoformat(),
+            "tension": measured,
+            ATTR_RESTRING_ID: latest["id"],
+        }
+        if tool := (call.data.get(ATTR_TOOL) or "").strip():
+            cal_record[ATTR_TOOL] = tool
+        calibration = await entry.runtime_data.async_add_calibration(cal_record)
         rates = {
             CONF_INITIAL_LOSS: fitted.rates.initial,
             CONF_FIRST_HOUR_LOSS: fitted.rates.first_hour,
@@ -499,7 +556,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass.config_entries.async_update_entry(
             entry, options={**entry.options, CONF_PLAY: play}
         )
-        return {"racket": entry.title, "measured_tension": measured, **rates}
+        return {
+            "racket": entry.title,
+            "measured_tension": measured,
+            "calibration": calibration,
+            **rates,
+        }
 
     async def update_restring(call: ServiceCall) -> ServiceResponse:
         entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
@@ -572,6 +634,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         }
         if history.sessions:
             response["play_sessions"] = list(reversed(history.sessions))
+        if history.calibrations:
+            response["calibrations"] = list(reversed(history.calibrations))
         return response
 
     async def log_play(call: ServiceCall) -> ServiceResponse:
@@ -581,6 +645,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             call.data[ATTR_HOURS],
             call.data.get(ATTR_DATE),
             call.data.get(ATTR_NOTES),
+            call.data.get(ATTR_SESSION_TYPE),
+            call.data.get(ATTR_SURFACE),
         )
         return {"racket": entry.title, "session": session}
 
@@ -603,6 +669,56 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 translation_placeholders={"session_id": session_id},
             )
         return {"racket": entry.title, "session": session}
+
+    async def update_play(call: ServiceCall) -> ServiceResponse:
+        entry = _get_entry(hass, call.data[ATTR_CONFIG_ENTRY_ID])
+        history = entry.runtime_data
+        if (session_id := call.data.get(ATTR_SESSION_ID)) is None:
+            if not history.sessions:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="no_sessions",
+                    translation_placeholders={"racket": entry.title},
+                )
+            session_id = max(history.sessions, key=lambda s: s["created"])["id"]
+        changes = _serialize(
+            {
+                k: v
+                for k, v in call.data.items()
+                if k
+                in (ATTR_HOURS, ATTR_DATE, ATTR_SESSION_TYPE, ATTR_SURFACE, ATTR_NOTES)
+            }
+        )
+        if (session := await history.async_update_session(session_id, changes)) is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="session_not_found",
+                translation_placeholders={"session_id": session_id},
+            )
+        return {"racket": entry.title, "session": session}
+
+    async def get_bag_summary(_call: ServiceCall) -> ServiceResponse:
+        return build_bag_summary(hass)
+
+    async def export_backup(call: ServiceCall) -> ServiceResponse:
+        if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
+            entries = [_get_entry(hass, entry_id)]
+            name = entries[0].title
+        else:
+            entries = list(hass.config_entries.async_loaded_entries(DOMAIN))
+            name = "all rackets"
+        return await async_export_backup(hass, entries, name)
+
+    async def import_backup(call: ServiceCall) -> ServiceResponse:
+        if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
+            entries = [_get_entry(hass, entry_id)]
+            explicit = True
+        else:
+            entries = list(hass.config_entries.async_loaded_entries(DOMAIN))
+            explicit = False
+        return await async_import_backup(
+            hass, call.data["file"], entries, explicit_target=explicit
+        )
 
     async def export_history(call: ServiceCall) -> ServiceResponse:
         if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
@@ -719,9 +835,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     hass.services.async_register(
         DOMAIN,
+        SERVICE_UPDATE_PLAY,
+        update_play,
+        UPDATE_PLAY_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_GET_HISTORY,
         get_history,
         HISTORY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_BAG_SUMMARY,
+        get_bag_summary,
+        BAG_SUMMARY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
@@ -738,9 +868,33 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         IMPORT_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EXPORT_BACKUP,
+        export_backup,
+        EXPORT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_IMPORT_BACKUP,
+        import_backup,
+        IMPORT_BACKUP_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    # WebSocket API + bundled Lovelace cards
+    async_register_websocket_commands(hass)
+    integration = await async_get_integration(hass, DOMAIN)
+    frontend_file = integration.file_path / "frontend" / "strung-cards.js"
+    if frontend_file.is_file():
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(FRONTEND_URL, str(frontend_file), cache_headers=False)]
+        )
+        if DATA_EXTRA_MODULE_URL in hass.data:
+            add_extra_js_url(hass, f"{FRONTEND_URL}?v={integration.version}")
 
     # services.yaml, kept to rebuild the forms with string suggestions
-    integration = await async_get_integration(hass, DOMAIN)
     hass.data[_DESCRIPTIONS_KEY] = await hass.async_add_executor_job(
         load_yaml_dict, str(integration.file_path / "services.yaml")
     )

@@ -175,7 +175,10 @@ async def test_play_sessions_round_trip(hass: HomeAssistant) -> None:
     both = await _call(hass, "export_history")
     assert both["play_sessions"] == 3
     assert Path(both["play_file"]).name.endswith("-play.csv")
-    assert both["play_csv"].splitlines()[0] == "racket,id,date,hours,notes"
+    assert (
+        both["play_csv"].splitlines()[0]
+        == "racket,id,date,hours,session_type,surface,notes"
+    )
     assert '"Match, 3 sets"' in both["play_csv"]
 
     # Back into the same racket: all duplicates

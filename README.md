@@ -68,6 +68,7 @@ unzip it into `<config>/custom_components/racket_tracker/`, and restart Home Ass
 | Field | Example | |
 |---|---|---|
 | Name | `Pure Aero` | Used for entity IDs, e.g. `sensor.pure_aero_tension` |
+| Copy settings from *(optional)* | `Pure Aero #1` | Shown once you have a racket: copies specs, play settings, due rules and usual setup (handy for matched pairs) |
 | Look up *(optional)* | `pure aero 2023` | Finds the racket in the [racket dataset](#looked-up-specs) and fills in its specs |
 | Brand / Model | `Babolat` / `Pure Aero 98` | Shown on the device |
 | Head size | `98` sq in | |
@@ -285,8 +286,10 @@ Example: polyester strung at 52 lbs two weeks ago, 4 hours a week → 8 hours pl
 10 % + 4 % × log10(14) + 3 % × log2(9) = 24 % lost, about **39.5 lbs** now.
 
 **Calibrate it to your strings.** Measure the mains with a stringbed tension meter or app and run
-`racket_tracker.calibrate_tension` (racket, measured tension, optional date). All three rates are
-scaled by the same factor so the estimate matches your measurement, and saved on the racket.
+`racket_tracker.calibrate_tension` (racket, measured tension, optional date and `tool`, e.g. `ERT 300`
+or `RacquetTune`). All three rates are scaled by the same factor so the estimate matches your
+measurement, saved on the racket, and each measurement is stored in the racket's history (`calibrations`)
+and plotted on the [bundled Racket card](#built-in-cards-zero-yaml).
 
 ### Logging play sessions instead
 
@@ -295,9 +298,11 @@ play you log counts:
 
 - press `button.<racket>_log_play_session` after you play: it logs **Usual session length**
   (default 1.5 h) for today, or
-- run `racket_tracker.log_play` (racket, hours, optional date and notes), e.g. from a script, an
-  NFC tag or a voice assistant. `racket_tracker.delete_play` removes a session (by default the
-  one logged last).
+- run `racket_tracker.log_play` (racket, hours, optional date, `session_type` such as
+  `singles_match`/`doubles_match`/`practice`/`ball_machine`, `surface` such as
+  `hard`/`clay`/`grass`/`indoor`, and `notes`), e.g. from the bundled card, a script, an NFC tag or
+  a voice assistant. `racket_tracker.update_play` edits a logged session (by default the one logged
+  last), and `racket_tracker.delete_play` removes one.
 
 A session counts for the strings on the racket that day (a session on a restring day counts for
 the new strings). Hours played, the estimated tension, string life hours and cost per hour then
@@ -402,11 +407,32 @@ data:
 - No `racket_tracker_restrung` events fire, so blueprints don't announce old restrings.
 
 **Play sessions.** If a racket has [logged sessions](#logging-play-sessions-instead), the export
-also writes `strung-<racket>-<time>-play.csv` (columns `racket`, `id`, `date`, `hours`, `notes`)
+also writes `strung-<racket>-<time>-play.csv` (columns `racket`, `id`, `date`, `hours`,
+`session_type`, `surface`, `notes`)
 and returns `play_file`, `play_sessions` and `play_csv`. Importing that file (or any CSV with
 `date` and `hours` columns and no `main_string`) adds play sessions instead of restrings; the
 response says which (`contents`). A session with the same ID, or the same date, hours and notes,
 is skipped.
+
+**Full backup (`.zip` with photos).** To back up or migrate everything — rackets, restrings, play
+sessions, calibrations and photos — in a single file:
+
+```yaml
+action: racket_tracker.export_backup
+# Optional: omit config_entry_id to back up every racket
+```
+
+This writes `strung-backup-<name>-<time>.zip` to `/config/racket_tracker/exports/`. Restore it on
+any instance with:
+
+```yaml
+action: racket_tracker.import_backup
+data:
+  file: /config/racket_tracker/exports/strung-backup-all-rackets-20261120-090000.zip
+  # Optional: pass config_entry_id to restore into a specific racket, else rackets match by name
+```
+
+Duplicates are skipped and no `racket_tracker_restrung` events are fired.
 
 ## Restring due
 
@@ -489,7 +515,41 @@ actions:
 
 ## Dashboard
 
-There's no automatic dashboard: you add the example view yourself. It takes a minute:
+### Built-in cards (zero YAML)
+
+Strung bundles two Lovelace cards automatically — no `scripts.yaml`, `input_select` helper, or
+separate HACS frontend install needed. Refresh your browser after installing, then open any
+dashboard and click **✏️ Edit → + Add card**:
+
+1. **Strung: Racket Card** (`custom:strung-racket-card`)
+   - Pick a racket from the visual dropdown (or leave empty for your first racket).
+   - Shows the racket photo, current strings, an SVG **freshness ring**, estimated tension, hours
+     played, next restring, and a **Tension & Calibrations** chart with measured dots.
+   - Includes one-tap buttons (**Log Restring**, **Usual Setup**, **Rate**, **Log Play**,
+     **Calibrate**, **Broke**) with unit-aware (`lbs`/`kg`) pop-up forms, string-catalog
+     autocomplete, and inline **✏️ Edit / 🗑️ Delete** buttons on every restring and play session.
+2. **Strung: Bag Overview & String Showdown** (`custom:strung-bag-card`)
+   - Cross-racket KPIs (30-day play time, YTD spend, bag cost/hour, match-ready rackets).
+   - **Grab a Racket — Bag Readiness**: every racket ranked by freshness with quick `+ Play` and
+     `Usual Setup` buttons.
+   - **String Setup Showdown**: compares every string setup across all your rackets by average
+     rating, average string life, breakage rate and cost per hour.
+
+If you prefer YAML:
+
+```yaml
+type: custom:strung-bag-card
+title: Tennis Bag
+```
+
+```yaml
+type: custom:strung-racket-card
+# config_entry_id is filled in by the visual editor; omit for your first racket
+```
+
+### Example dashboards (Home Assistant built-in cards only)
+
+Prefer sticking strictly to Home Assistant's built-in cards? You can paste the example view instead:
 
 1. Add the scripts from [`examples/scripts.yaml`](examples/scripts.yaml) to your `scripts.yaml`,
    then reload them (**Developer tools → YAML → Scripts**).
@@ -592,15 +652,19 @@ Entity IDs are built from the racket name: `Pure Aero` → `sensor.pure_aero_*`.
 | Action | What it does | Response |
 |---|---|---|
 | `racket_tracker.add_restring` | Log a restring | Optional: the new restring, including its `id` |
-| `racket_tracker.calibrate_tension` | Scale the tension estimate to a measured mains tension | Optional: the new rates |
+| `racket_tracker.calibrate_tension` | Scale the tension estimate to a measured mains tension (optional `date`, `tool`) and save the measurement | Optional: the new rates and `calibration` |
 | `racket_tracker.repeat_restring` | Log a restring with the usual setup, or copy a past one (`restring_id`) | Optional: the new restring |
 | `racket_tracker.update_restring` | Change any field; add, replace or remove the photo; mark the strings broken (`broken`, `broken_date`). **Leave `restring_id` empty to edit the latest restring.** | Optional: the updated restring |
 | `racket_tracker.delete_restring` | Delete a restring and its photo | — |
-| `racket_tracker.log_play` | Log a play session (racket, hours, optional date, notes); needs [logged sessions](#logging-play-sessions-instead) | Optional: the session, including its `id` |
+| `racket_tracker.log_play` | Log a play session (racket, hours, optional date, `session_type`, `surface`, notes); needs [logged sessions](#logging-play-sessions-instead) | Optional: the session, including its `id` |
+| `racket_tracker.update_play` | Edit a logged play session (`session_id`, else the one logged last) | Optional: the updated session |
 | `racket_tracker.delete_play` | Delete a play session (`session_id`, else the one logged last) | Optional: the deleted session |
-| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]`, `play_sessions[]` (if any) |
+| `racket_tracker.get_history` | The whole history | `racket`, `specs`, `restring_count`, `total_cost`, `stats`, `restrings[]`, `play_sessions[]`, `calibrations[]` |
+| `racket_tracker.get_bag_summary` | Cross-racket totals, readiness ranking by freshness, and string setup comparison | `totals`, `rackets[]`, `setups[]`, `currency` |
 | `racket_tracker.export_history` | Save one racket's (or every racket's) history as CSV | Optional: `file`, `restrings`, `csv`; with play sessions also `play_file`, `play_sessions`, `play_csv` |
 | `racket_tracker.import_history` | Add restrings, or play sessions, from a CSV file or text ([details](#import-and-export)) | Optional: `contents`, `imported`, `skipped_duplicates`, `skipped_other_rackets` |
+| `racket_tracker.export_backup` | Save rackets, restrings, play sessions, calibrations and photos into one `.zip` archive | Optional: `file`, `rackets`, `restrings`, `play_sessions`, `photos` |
+| `racket_tracker.import_backup` | Restore restrings, play sessions, calibrations and photos from a `.zip` backup | Optional: `rackets_matched`, `imported_restrings`, `skipped_restrings`, `imported_sessions`, `skipped_sessions`, `restored_photos` |
 
 Restring IDs are in the `history` attribute and in the action responses.
 

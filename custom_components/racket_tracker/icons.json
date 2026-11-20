@@ -144,6 +144,9 @@
     "log_play": {
       "service": "mdi:tennis-ball"
     },
+    "update_play": {
+      "service": "mdi:timer-edit-outline"
+    },
     "delete_play": {
       "service": "mdi:timer-remove-outline"
     },
@@ -161,6 +164,15 @@
     },
     "import_history": {
       "service": "mdi:file-import"
+    },
+    "get_bag_summary": {
+      "service": "mdi:bag-personal"
+    },
+    "export_backup": {
+      "service": "mdi:archive-arrow-down"
+    },
+    "import_backup": {
+      "service": "mdi:archive-arrow-up"
     }
   }
 }

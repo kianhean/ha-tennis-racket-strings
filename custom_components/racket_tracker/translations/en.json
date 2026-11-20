@@ -6,6 +6,7 @@
         "description": "Add a racket to track its restring history. To fill in its specs automatically, type its brand and model under **Look up**.",
         "data": {
           "name": "Name",
+          "copy_from": "Copy settings from",
           "lookup": "Look up",
           "brand": "Brand",
           "model": "Model",
@@ -15,6 +16,7 @@
         },
         "data_description": {
           "name": "A name to tell this racket apart, e.g. \"Pure Aero #1\".",
+          "copy_from": "Optional. Duplicate specs, play settings, due rules and usual setup from an existing racket (handy for matched pairs).",
           "lookup": "Optional. Search the Racqix racket dataset, e.g. \"pure aero 2023\" or \"blade 98 16x19\".",
           "string_pattern": "e.g. 16x19"
         },
@@ -304,6 +306,22 @@
         "weekly": "Hours per week",
         "logged": "Logged sessions"
       }
+    },
+    "session_type": {
+      "options": {
+        "singles_match": "Singles match",
+        "doubles_match": "Doubles match",
+        "practice": "Practice / hitting",
+        "ball_machine": "Ball machine"
+      }
+    },
+    "surface": {
+      "options": {
+        "hard": "Hard court",
+        "clay": "Clay",
+        "grass": "Grass",
+        "indoor": "Indoor"
+      }
     }
   },
   "entity": {
@@ -532,6 +550,9 @@
     },
     "session_not_found": {
       "message": "No play session found with ID {session_id}."
+    },
+    "backup_invalid": {
+      "message": "Couldn't read that backup: {reason}."
     }
   },
   "services": {
@@ -638,6 +659,10 @@
         "date": {
           "name": "Date",
           "description": "When you measured it. Defaults to today."
+        },
+        "tool": {
+          "name": "Tool / meter",
+          "description": "Optional, e.g. ERT 300 or RacquetTune."
         }
       }
     },
@@ -657,9 +682,17 @@
           "name": "Date",
           "description": "When you played. Defaults to today."
         },
+        "session_type": {
+          "name": "Session type",
+          "description": "Optional, e.g. singles match or practice."
+        },
+        "surface": {
+          "name": "Court surface",
+          "description": "Optional, e.g. hard or clay."
+        },
         "notes": {
           "name": "Notes",
-          "description": "Optional, e.g. match or practice."
+          "description": "Optional notes for this session."
         }
       }
     },
@@ -674,6 +707,40 @@
         "session_id": {
           "name": "Session ID",
           "description": "The session's ID (from Log play or Get history). Leave empty to delete the session logged last."
+        }
+      }
+    },
+    "update_play": {
+      "name": "Update play session",
+      "description": "Change a logged play session's hours, date, type, surface or notes. Updates the session logged last if no ID is given.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket the session was logged for."
+        },
+        "session_id": {
+          "name": "Session ID",
+          "description": "ID of the session to change. Leave empty for the session logged last."
+        },
+        "hours": {
+          "name": "Hours",
+          "description": "How long you played, e.g. 1.5."
+        },
+        "date": {
+          "name": "Date",
+          "description": "When you played."
+        },
+        "session_type": {
+          "name": "Session type",
+          "description": "Optional, e.g. singles match or practice."
+        },
+        "surface": {
+          "name": "Court surface",
+          "description": "Optional, e.g. hard or clay."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Optional notes for this session."
         }
       }
     },
@@ -792,6 +859,35 @@
         "csv": {
           "name": "CSV text",
           "description": "Or paste the CSV here."
+        }
+      }
+    },
+    "get_bag_summary": {
+      "name": "Get bag summary",
+      "description": "Return cross-racket totals, readiness ranking by freshness, and a string setup comparison across every racket.",
+      "fields": {}
+    },
+    "export_backup": {
+      "name": "Export full backup",
+      "description": "Save rackets, restrings, play sessions and photos into a single .zip archive in /config/racket_tracker/exports.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "The racket to back up. Leave empty to back up every racket."
+        }
+      }
+    },
+    "import_backup": {
+      "name": "Import full backup",
+      "description": "Restore restrings, play sessions and photos from a Strung .zip backup. Duplicates are skipped and no restrung events are fired.",
+      "fields": {
+        "file": {
+          "name": "Backup file",
+          "description": "Path to a .zip backup in /config/racket_tracker/exports or another allowed folder (allowlist_external_dirs)."
+        },
+        "config_entry_id": {
+          "name": "Racket",
+          "description": "Optional. Restore into a specific racket; leave empty to match rackets by name."
         }
       }
     }

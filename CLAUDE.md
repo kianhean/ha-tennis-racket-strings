@@ -9,13 +9,16 @@ One config entry = one racket = one device.
 custom_components/racket_tracker/
 ├── __init__.py        # Setup/unload, action registration (in async_setup), login-only photo view
 ├── const.py           # DOMAIN, option keys, restring field names, action/event names
-├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>: restrings + play sessions), listeners
+├── history.py         # RacketHistory: per-racket Store (.storage/racket_tracker.<entry_id>: restrings + play sessions + calibrations), listeners
 ├── images.py          # Photo import (media selector / media-source ID / allowed path) → <config>/racket_tracker/images
 ├── dataset.py         # Racqix dataset: download ≤ once a day (after HA start / on search) → .storage/racket_tracker.dataset; fallback racqix_dataset.json (bundled, unmodified CC BY-NC-ND: never edit, only replace); search, label, apply()
 ├── repairs.py         # On entry setup: linked racket looked up in the list (async_get_dataset; not in it = removed) → issues (specs changed / missing: fix flows; unreachable = no copy as new as the link's version: warning)
 ├── string_catalog.py  # Bundled string list (string_catalog.json, CC0 2024 + string_catalog_extra.json): suggestions(), material()
-├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary()
+├── stats.py           # Pure stats over the history: string life, breakages, cost this year / per hour, most used / best rated setup, summary(), freshness_score(), setup_comparison(), bag_summary()
 ├── history_io.py      # CSV export (<config>/racket_tracker/exports, not served; play sessions in a second *-play.csv) and import (parse_csv / parse_play_csv by columns: validate all rows, skip duplicates)
+├── backup.py          # Full .zip backup/restore (backup.json + images/) to/from <config>/racket_tracker/exports
+├── websocket_api.py   # WebSocket commands (racket_tracker/bag, /racket, /strings) for the bundled Lovelace cards
+├── frontend/          # Bundled zero-YAML Lovelace cards (strung-cards.js: <strung-racket-card>, <strung-bag-card>), served at /racket_tracker/strung-cards.js + add_extra_js_url
 ├── tension.py         # Estimated tension: options["play"] → estimate(); log-time + log-play model, sources in its docstring
 ├── backfill.py        # Hourly long-term statistics for tension + estimated_tension from the history (recorder import, serialized per entry)
 ├── due.py             # Restring rules options["due"] (days, hours_played, min_tension) → next_due()

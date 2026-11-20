@@ -35,8 +35,12 @@ from .const import (
     ATTR_MAIN_TENSION,
     ATTR_NOTES,
     ATTR_RATING,
+    ATTR_SESSION_TYPE,
     ATTR_STRINGER,
+    ATTR_SURFACE,
     DOMAIN,
+    SESSION_TYPES,
+    SURFACES,
     TENSION_UNIT_KG,
     TENSION_UNIT_LBS,
 )
@@ -56,7 +60,15 @@ COLUMNS = (
     ATTR_BROKEN_DATE,
     ATTR_NOTES,
 )
-PLAY_COLUMNS = ("racket", "id", ATTR_DATE, ATTR_HOURS, ATTR_NOTES)
+PLAY_COLUMNS = (
+    "racket",
+    "id",
+    ATTR_DATE,
+    ATTR_HOURS,
+    ATTR_SESSION_TYPE,
+    ATTR_SURFACE,
+    ATTR_NOTES,
+)
 # Spreadsheet headings we understand too
 ALIASES = {
     "duration": ATTR_HOURS,
@@ -327,6 +339,14 @@ def _session_row(row: dict[str, str]) -> dict[str, Any]:
     if not 0.1 <= hours <= 24:
         raise ValueError(f"hours {hours:g} is not 0.1-24")
     session: dict[str, Any] = {ATTR_DATE: day, ATTR_HOURS: _whole(round(hours, 2))}
+    if stype := (row.get(ATTR_SESSION_TYPE) or "").strip().lower():
+        if stype not in SESSION_TYPES:
+            raise ValueError(f"session_type {stype!r} is not valid")
+        session[ATTR_SESSION_TYPE] = stype
+    if surface := (row.get(ATTR_SURFACE) or "").strip().lower():
+        if surface not in SURFACES:
+            raise ValueError(f"surface {surface!r} is not valid")
+        session[ATTR_SURFACE] = surface
     if notes := (row.get(ATTR_NOTES) or "").strip():
         session[ATTR_NOTES] = notes
     if _ID.match(session_id := (row.get("id") or "").strip()):

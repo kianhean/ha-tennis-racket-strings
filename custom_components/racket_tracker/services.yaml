@@ -133,6 +133,11 @@ calibrate_tension:
       required: false
       selector:
         date:
+    tool:
+      required: false
+      example: "ERT 300"
+      selector:
+        text:
 
 log_play:
   fields:
@@ -155,6 +160,26 @@ log_play:
       required: false
       selector:
         date:
+    session_type:
+      required: false
+      selector:
+        select:
+          options:
+            - singles_match
+            - doubles_match
+            - practice
+            - ball_machine
+          translation_key: session_type
+    surface:
+      required: false
+      selector:
+        select:
+          options:
+            - hard
+            - clay
+            - grass
+            - indoor
+          translation_key: surface
     notes:
       required: false
       selector:
@@ -168,6 +193,56 @@ delete_play:
         config_entry:
           integration: racket_tracker
     session_id:
+      required: false
+      selector:
+        text:
+
+update_play:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: racket_tracker
+    session_id:
+      required: false
+      selector:
+        text:
+    hours:
+      required: false
+      example: 1.5
+      selector:
+        number:
+          min: 0.1
+          max: 24
+          step: 0.1
+          mode: box
+          unit_of_measurement: h
+    date:
+      required: false
+      selector:
+        date:
+    session_type:
+      required: false
+      selector:
+        select:
+          options:
+            - singles_match
+            - doubles_match
+            - practice
+            - ball_machine
+          translation_key: session_type
+    surface:
+      required: false
+      selector:
+        select:
+          options:
+            - hard
+            - clay
+            - grass
+            - indoor
+          translation_key: surface
+    notes:
       required: false
       selector:
         text:
@@ -302,3 +377,27 @@ import_history:
       selector:
         text:
           multiline: true
+
+get_bag_summary:
+  fields: {}
+
+export_backup:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: racket_tracker
+
+import_backup:
+  fields:
+    file:
+      required: true
+      example: "/config/racket_tracker/exports/strung-backup-all-rackets-20261120-090000.zip"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: racket_tracker
